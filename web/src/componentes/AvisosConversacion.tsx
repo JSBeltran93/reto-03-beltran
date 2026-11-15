@@ -1,3 +1,5 @@
+import type { ResumenCaso } from "@contratos/contratos-api";
+
 import type { ErrorVisible } from "../estado/conversacion";
 import type { Hallazgo } from "../estado/resultados";
 import { AvisoError } from "./AvisoError";
@@ -14,6 +16,8 @@ export interface PropiedadesAvisosConversacion {
   readonly confirmaciones: readonly Hallazgo[];
   /** Caso cuya OC se confirma (null si el servidor no lo informó). */
   readonly caso: string | null;
+  /** Resumen del caso pendiente en la bandeja, si ya se cargó. */
+  readonly resumen?: ResumenCaso | undefined;
   readonly alReintentar: () => void;
   readonly alEnviar: (texto: string) => void;
 }
@@ -29,6 +33,7 @@ export function AvisosConversacion({
   mostrarConfirmacion,
   confirmaciones,
   caso,
+  resumen,
   alReintentar,
   alEnviar,
 }: PropiedadesAvisosConversacion) {
@@ -46,6 +51,7 @@ export function AvisosConversacion({
         <TarjetaConfirmacion
           confirmaciones={confirmaciones}
           caso={caso}
+          resumen={resumen}
           deshabilitado={cargando}
           alConfirmar={() => {
             alEnviar(RESPUESTAS_CONFIRMACION.confirmar);

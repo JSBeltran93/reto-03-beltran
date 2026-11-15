@@ -67,3 +67,33 @@ export const EsquemaSalud = z.object({
 });
 /** Respuesta de GET /api/health. */
 export type Salud = z.infer<typeof EsquemaSalud>;
+
+/** Estado de un caso en la bandeja de la analista, derivado de control.csv y de SAP. */
+export const ESTADOS_CASO = {
+  sinProcesar: "sin_procesar",
+  pendiente: "pendiente",
+  bloqueada: "bloqueada",
+  creada: "creada",
+} as const;
+/** Estado de un caso en la bandeja. */
+export type EstadoCaso = (typeof ESTADOS_CASO)[keyof typeof ESTADOS_CASO];
+
+/** Resumen de un caso para la bandeja (GET /api/casos). */
+export const EsquemaResumenCaso = z.object({
+  caso: z.string(),
+  solicitud_id: z.string(),
+  descripcion: z.string(),
+  proveedor: z.string(),
+  valor_total: z.number(),
+  moneda: z.string(),
+  centro_costo: z.string(),
+  estado: z.enum(ESTADOS_CASO),
+  numero_oc: z.string().nullable(),
+});
+/** Resumen de un caso para la bandeja. */
+export type ResumenCaso = z.infer<typeof EsquemaResumenCaso>;
+
+/** Respuesta de GET /api/casos. */
+export const EsquemaListaCasos = z.object({ casos: z.array(EsquemaResumenCaso) });
+/** Respuesta de GET /api/casos. */
+export type ListaCasos = z.infer<typeof EsquemaListaCasos>;

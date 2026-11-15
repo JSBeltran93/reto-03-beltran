@@ -3,11 +3,12 @@ import {
   EsquemaSolicitudChat,
   type VistaSesion,
 } from "@contratos/contratos-api";
+import { useQueryClient } from "@tanstack/react-query";
 import { type Dispatch, useCallback, useEffect, useReducer, useState } from "react";
 
 import { ErrorApi, MENSAJES_ERROR_API } from "../api/cliente";
 import { useEnviarMensaje } from "../consultas/useEnviarMensaje";
-import { useSesion } from "../consultas/useSesion";
+import { claveSesion, useSesion } from "../consultas/useSesion";
 import {
   type AccionConversacion,
   type ErrorVisible,
@@ -26,8 +27,17 @@ export interface Conversacion {
   readonly enviar: (texto: string) => void;
   /** Reenvía el último mensaje después de un error reintentable. */
   readonly reintentar: () => void;
-  /** Inicia una conversación nueva con otra sesión (no disponible mientras carga). */
-  readonly nuevaSesion: () => void;
+  /**
+   * Inicia una conversación nueva con otra sesión (no disponible mientras carga).
+   * @returns el identificador de la sesión nueva, o null si no se pudo cambiar
+   */
+  readonly nuevaSesion: () => string | null;
+  /**
+   * Cambia a una sesión existente o nueva y rehidrata su historial desde el servidor
+   * (no disponible mientras carga).
+   * @returns true si se cambió de sesión
+   */
+  readonly abrirSesion: (id: string) => boolean;
 }
 
 /** Vuelve a leer la sesión del servidor (forma de `refetch` de TanStack Query). */
@@ -174,6 +184,33 @@ function useHidratacion(
 }
 
 /**
+ * Cambio de sesión: descarta la petición anterior, recuerda la sesión y olvida el historial
+ * en caché para volver a pedirlo al servidor (al volver a un caso se ve su conversación al día).
+ * @param cargando - si hay una petición o un sondeo en curso (entonces no se cambia)
+ * @param descartar - descarta el estado de la mutación anterior
+ * @param despachar - despachador del reducer
+ * @returns función que abre una sesión y dice si se cambió
+ */
+function useAbrirSesion(
+  cargando: boolean,
+  descartar: () => void,
+  despachar: Dispatch<AccionConversacion>,
+): (id: string) => boolean {
+  const clienteConsultas = useQueryClient();
+  return useCallback(
+    (id: string) => {
+      if (cargando) return false;
+      descartar();
+      guardarSesion(id);
+      clienteConsultas.removeQueries({ queryKey: claveSesion(id), exact: true });
+      despachar({ tipo: "NUEVA_SESION", sessionId: id });
+      return true;
+    },
+    [cargando, descartar, despachar, clienteConsultas],
+  );
+}
+
+/**
  * Estado y acciones de la conversación con el agente: combina el reducer puro, la
  * mutación y la consulta del historial de TanStack Query y la sesión guardada.
  * @returns estado y acciones
@@ -205,13 +242,11 @@ export function useConversacion(): Conversacion {
     solicitar(estado.ultimoMensaje);
   }, [cargando, solicitar, estado.ultimoMensaje]);
 
+  const abrirSesion = useAbrirSesion(cargando, descartar, despachar);
   const nuevaSesion = useCallback(() => {
-    if (cargando) return;
-    descartar();
     const id = nuevoIdSesion();
-    guardarSesion(id);
-    despachar({ tipo: "NUEVA_SESION", sessionId: id });
-  }, [cargando, descartar]);
+    return abrirSesion(id) ? id : null;
+  }, [abrirSesion]);
 
-  return { estado, cargando, enviar, reintentar, nuevaSesion };
+  return { estado, cargando, enviar, reintentar, nuevaSesion, abrirSesion };
 }

@@ -1,32 +1,18 @@
-import type { EntradaHistorial, VistaLlamada } from "@contratos/contratos-api";
+import type { EntradaHistorial } from "@contratos/contratos-api";
 
 import { agruparEnBloques, type Bloque } from "../estado/bloques";
 import { BurbujaMensaje } from "./BurbujaMensaje";
-import { CLASES, TONOS } from "./clases";
-import { TarjetaHerramienta } from "./TarjetaHerramienta";
-import { TEXTOS_ESTADO, TEXTOS_HERRAMIENTA } from "./textos";
+import { TONOS } from "./clases";
+import { PasosTurno } from "./PasosTurno";
+import { TEXTOS_ESTADO } from "./textos";
 
 /** Props de {@link ListaMensajes}. */
 export interface PropiedadesListaMensajes {
   readonly entradas: readonly EntradaHistorial[];
 }
 
-function LineaDeTiempo({ llamadas }: { readonly llamadas: readonly VistaLlamada[] }) {
-  return (
-    <section aria-label={TEXTOS_HERRAMIENTA.pasos} className={`${CLASES.tarjeta} p-4`}>
-      <ol className="space-y-4 border-l border-borde pl-0">
-        {llamadas.map((llamada, indice) => (
-          <li key={indice} className="-ml-3">
-            <TarjetaHerramienta llamada={llamada} />
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
-}
-
 function renderizarBloque(bloque: Bloque) {
-  if (bloque.tipo === "pasos") return <LineaDeTiempo llamadas={bloque.llamadas} />;
+  if (bloque.tipo === "pasos") return <PasosTurno llamadas={bloque.llamadas} />;
   const { entrada } = bloque;
   if (entrada.tipo === "error") {
     return (

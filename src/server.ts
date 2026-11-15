@@ -13,15 +13,22 @@ import { casoPendiente } from "./agente/confirmacion";
 import { cargarPromptSistema } from "./agente/prompt-sistema";
 import { catalogoOc } from "./agente/registro-herramientas";
 import { AlmacenSesiones } from "./agente/sesiones";
-import { EsquemaSolicitudChat, type Salud, type VistaSesion } from "./comun/contratos-api";
+import {
+  EsquemaSolicitudChat,
+  type ListaCasos,
+  type Salud,
+  type VistaSesion,
+} from "./comun/contratos-api";
 import { LimitadorSolicitudes } from "./comun/limitador";
 import { registradorJson } from "./comun/registrador";
 import { relojSistema } from "./comun/reloj";
 import { RUTAS_API } from "./comun/rutas-api";
 import { cargarConfiguracion, PROVEEDOR_LLM } from "./configuracion";
 import { crearAdaptadoresLlm } from "./llm/fabrica";
+import type { SapAdapter } from "./sap/adapter";
 import { SapSimulado } from "./sap/mock";
 import { crearHerramientasOc } from "./tools/oc";
+import { resumirCasos } from "./tools/oc/bandeja";
 
 /** Dependencias para construir la aplicación HTTP. */
 export interface DependenciasAplicacion {
@@ -30,6 +37,8 @@ export interface DependenciasAplicacion {
   readonly carpetaEstaticos: string;
   /** Limitador de mensajes de chat por IP; sin él no se limita (tests). */
   readonly limitador?: LimitadorSolicitudes;
+  /** SAP que consulta la bandeja; por defecto, el simulado sobre la raíz del ciclo. */
+  readonly sap?: SapAdapter;
 }
 
 /** Códigos HTTP usados por la API. */
@@ -85,6 +94,16 @@ function limitarChat(dependencias: DependenciasAplicacion) {
   };
 }
 
+/** GET /api/casos: bandeja de solo lectura; un fallo de lectura pasa al manejador de errores. */
+function rutaCasos(aplicacion: Express, dependencias: DependenciasAplicacion): void {
+  const { raiz } = dependencias.ciclo;
+  const sap = dependencias.sap ?? new SapSimulado(raiz);
+  aplicacion.get(RUTAS_API.casos, async (_req, res) => {
+    const lista: ListaCasos = { casos: await resumirCasos(raiz, sap) };
+    res.json(lista);
+  });
+}
+
 function rutasApi(aplicacion: Express, dependencias: DependenciasAplicacion): void {
   aplicacion.get(RUTAS_API.salud, (_req, res) => {
     const salud: Salud = {
@@ -118,6 +137,8 @@ function rutasApi(aplicacion: Express, dependencias: DependenciasAplicacion): vo
     };
     res.json(vista);
   });
+
+  rutaCasos(aplicacion, dependencias);
 
   aplicacion.all(RUTAS_API.desconocidaPatron, (_req, res) => {
     res.status(HTTP.noEncontrado).json({ error: MENSAJES_HTTP.rutaNoEncontrada });

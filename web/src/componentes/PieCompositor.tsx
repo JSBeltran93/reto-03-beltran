@@ -26,8 +26,8 @@ export function PieCompositor({
     ? TEXTOS_COMPOSITOR.esperandoConfirmacion
     : TEXTOS_COMPOSITOR.normal;
   return (
-    <footer className="sticky bottom-0 border-t border-borde bg-fondo/95 backdrop-blur">
-      <div className="mx-auto max-w-3xl px-4 pt-3 pb-4">
+    <footer className="sticky bottom-0 -mx-4 border-t border-borde bg-fondo/95 px-4 backdrop-blur lg:mx-0 lg:px-0">
+      <div className="mx-auto max-w-3xl pt-3 pb-4">
         <Compositor
           deshabilitado={deshabilitado}
           textoGuia={textoGuia}

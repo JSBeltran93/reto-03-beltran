@@ -26,6 +26,9 @@ export const EsquemaDatosValidacion = z.object({
 export type DatosValidacion = z.infer<typeof EsquemaDatosValidacion>;
 
 const EsquemaOrdenVista = z.object({
+  referencia: z.object({ solicitud_id: z.string() }).optional(),
+  sociedad: z.string().optional(),
+  organizacion_compras: z.string().optional(),
   proveedor: z.object({ codigo_sap: z.string(), nit: z.string(), nombre: z.string() }),
   moneda: z.string(),
   condiciones_pago: z.string(),
