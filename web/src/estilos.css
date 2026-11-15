@@ -7,6 +7,8 @@
  * - Contraste AA: texto normal ≥ 4.5:1 sobre su fondo en ambos temas.
  * - Escala tipográfica 12/14/16/20/24 (text-xs, text-sm, text-base, text-xl, text-2xl).
  * - Una sola familia (la del sistema) y un anillo de foco común (`anillo-foco`).
+ * - Un solo acento (marca); los estados usan ícono + texto además del color.
+ * - Espaciado en múltiplos de 4 px; objetivos táctiles de al menos 44 px (size-11, min-h-11).
  */
 
 :root {
@@ -31,6 +33,9 @@
   --info: #1d4ed8;
   --info-suave: #eff6ff;
   --anillo: #2563eb;
+
+  /* Alto fijo del encabezado: la bandeja de escritorio se pega justo debajo. */
+  --alto-encabezado: 3.5rem;
 
   /* Alto reservado para el pie fijo: el desplazamiento automático no deja contenido debajo de él. */
   --espacio-pie: 8rem;
