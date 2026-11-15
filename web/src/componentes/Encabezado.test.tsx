@@ -1,31 +1,51 @@
 import type { QueryStatus } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { Encabezado } from "./Encabezado";
 import { TEXTOS_ENCABEZADO } from "./textos";
 
-const MODELO = "claude-opus-5-5";
+const MODELO = "gemini-3.6-flash";
+
+const renderizar = (estadoSalud: QueryStatus, claveInvalida = false, alNuevaSesion = vi.fn()) =>
+  render(
+    <Encabezado
+      estadoSalud={estadoSalud}
+      modelo={MODELO}
+      deshabilitado={false}
+      alNuevaSesion={alNuevaSesion}
+      claveInvalida={claveInvalida}
+    />,
+  );
+
+const indicador = () => screen.getByText(TEXTOS_ENCABEZADO.estadoServidor.trim()).closest("p");
 
 describe("Encabezado", () => {
   it.each<[string, QueryStatus, boolean, string]>([
-    ["servidor conectado", "success", false, MODELO],
+    ["servidor conectado", "success", false, TEXTOS_ENCABEZADO.enLinea],
     ["clave del modelo inválida", "success", true, TEXTOS_ENCABEZADO.claveInvalida],
     ["conectando", "pending", false, TEXTOS_ENCABEZADO.conectando],
     ["sin servidor (prevalece sobre la clave)", "error", true, TEXTOS_ENCABEZADO.sinServidor],
-  ])("píldora: %s", (_nombre, estadoSalud, claveInvalida, texto) => {
-    render(
-      <Encabezado
-        estadoSalud={estadoSalud}
-        modelo={MODELO}
-        deshabilitado={false}
-        alNuevaSesion={vi.fn()}
-        claveInvalida={claveInvalida}
-      />,
-    );
+  ])("estado: %s", (_nombre, estadoSalud, claveInvalida, texto) => {
+    renderizar(estadoSalud, claveInvalida);
 
-    expect(
-      screen.getByText(TEXTOS_ENCABEZADO.estadoServidor.trim()).parentElement,
-    ).toHaveTextContent(texto);
+    expect(indicador()).toHaveTextContent(texto);
+  });
+
+  it("muestra el modelo solo como ayuda emergente, no como texto", () => {
+    renderizar("success");
+
+    expect(indicador()).toHaveAttribute("title", TEXTOS_ENCABEZADO.modelo(MODELO));
+    expect(screen.queryByText(MODELO)).not.toBeInTheDocument();
+  });
+
+  it("«Nueva sesión» tiene nombre accesible aunque en móvil sea solo un ícono", async () => {
+    const alNuevaSesion = vi.fn();
+    renderizar("success", false, alNuevaSesion);
+
+    await userEvent.click(screen.getByRole("button", { name: TEXTOS_ENCABEZADO.nuevaSesion }));
+
+    expect(alNuevaSesion).toHaveBeenCalledOnce();
   });
 });
