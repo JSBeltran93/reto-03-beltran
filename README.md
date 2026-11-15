@@ -23,16 +23,16 @@ npm run dev          # back (http://localhost:3000) + front (http://localhost:51
 | `ANTHROPIC_API_KEY`      | —                   | Clave del modelo; solo en el backend (`.env` local o Variables de Railway) |
 | `LLM_MODELO`             | `claude-opus-5-5`   | Modelo principal                                                           |
 | `LLM_MODELO_RESPALDO`    | `claude-sonnet-5-5` | Modelo de respaldo si el principal falla                                   |
-| `LLM_TIMEOUT_MS`         | `60000`             | Tiempo máximo por llamada al modelo                                        |
+| `LLM_TIMEOUT_MS`         | `60000`             | Tiempo máximo por llamada al modelo (el SDK reintenta 1 vez)               |
 | `MAX_ITERACIONES`        | `25`                | Tope de iteraciones herramienta → modelo por turno (CA1)                   |
-| `MAX_SEGUNDOS_TURNO`     | ver `.env.example`  | Duración máxima de un turno                                                |
-| `MAX_SOLICITUDES_MINUTO` | ver `.env.example`  | Límite de mensajes por minuto e IP (responde 429)                          |
+| `MAX_SEGUNDOS_TURNO`     | `240`               | Duración máxima de un turno (el front espera hasta 270 s)                  |
+| `MAX_SOLICITUDES_MINUTO` | `20`                | Límite de mensajes por minuto e IP (responde 429 con `Retry-After`)        |
 | `MAX_TOKENS_SESION`      | `200000`            | Tope de tokens por sesión                                                  |
 | `MAX_TOKENS_DIA`         | `3000000`           | Tope diario de tokens del servidor                                         |
 | `MAX_SESIONES`           | `200`               | Sesiones en memoria (se desaloja la de uso menos reciente)                 |
 | `PORT`                   | `3000`              | Puerto HTTP (Railway lo asigna)                                            |
 
-`.env.example` es la referencia completa, incluidos los límites de solicitudes por IP.
+`.env.example` es la referencia completa.
 
 ## Demo sin modelo
 
@@ -67,13 +67,13 @@ Hooks de git: lint y formato al commitear, mensaje validado con commitlint, tipo
 
 ## API
 
-| Método | Ruta                | Cuerpo                                      | Respuesta                                                                                               |
-| ------ | ------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `POST` | `/api/chat`         | `{ "sessionId": "<uuid>", "message": "…" }` | `{ "reply", "toolCalls": [{ "nombre", "args", "ok", "resumen", … }], "needsConfirmation", "esError"? }` |
-| `GET`  | `/api/sessions/:id` | —                                           | `{ "id", "historial": [...] }`; 404 si no existe                                                        |
-| `GET`  | `/api/health`       | —                                           | `{ "ok": true, "provider", "model" }` (sin claves)                                                      |
+| Método | Ruta                | Cuerpo                                      | Respuesta                                                                                                                        |
+| ------ | ------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/api/chat`         | `{ "sessionId": "<uuid>", "message": "…" }` | `{ "reply", "toolCalls": [{ "nombre", "args", "ok", "resumen", "datos"? }], "needsConfirmation", "casoPendiente"?, "esError"? }` |
+| `GET`  | `/api/sessions/:id` | —                                           | `{ "id", "historial": [...], "needsConfirmation", "casoPendiente" }`; 404 si no existe                                           |
+| `GET`  | `/api/health`       | —                                           | `{ "ok": true, "provider", "model" }` (sin claves)                                                                               |
 
-Ejemplo de `resumen`: `"apta · bloqueos: ninguna · confirmaciones: RC5"`. Las rutas viven en `RUTAS_API` (`src/comun/rutas-api.ts`), compartidas por back y front. Cuerpo inválido o JSON roto → `400`; cuerpo de más de 32 kb → `413`; ruta `/api/*` inexistente → `404`. Los errores del modelo o de una herramienta llegan como `reply` con `esError: true` y la sesión sigue activa.
+Ejemplo de `resumen`: `"apta · bloqueos: ninguna · confirmaciones: RC5"`. Las rutas viven en `RUTAS_API` (`src/comun/rutas-api.ts`), compartidas por back y front. `sessionId` debe ser un UUID y `message` tener entre 1 y 4000 caracteres. Cuerpo inválido o JSON roto → `400`; cuerpo de más de 32 kb → `413`; ruta `/api/*` inexistente → `404`; más de `MAX_SOLICITUDES_MINUTO` mensajes por minuto e IP → `429` con cabecera `Retry-After`; error inesperado → `500` con un mensaje genérico (sin trazas). Los errores del modelo o de una herramienta llegan como `reply` con `esError: true` y la sesión sigue activa.
 
 ## Arquitectura
 
@@ -116,12 +116,16 @@ demo.ts                           verificación sin modelo
 
 ## Despliegue
 
-Railway con configuración como código (`railway.json`): build `npm ci --include=dev && npm run build`, arranque `npm start`, health check en `/api/health`. Un push a `develop` despliega; alternativa equivalente: `railway up`. La clave se configura solo en Variables de Railway. El disco es efímero: `out/` se pierde al redesplegar ([ADR-0007](documentacion/decisiones/0007-despliegue-en-railway.md)).
+Railway con configuración como código (`railway.json`): build por defecto de Railpack (instala dependencias y ejecuta `npm run build`), arranque `npm start`, health check en `/api/health`. Un push a `develop` despliega; alternativa equivalente: `railway up`. La clave se configura solo en Variables de Railway. El disco es efímero: `out/` se pierde al redesplegar ([ADR-0007](documentacion/decisiones/0007-despliegue-en-railway.md)).
 
 ## Bonus: módulo reutilizable (`modulo/`)
 
 - `modulo/agent.md`: frontmatter (`description`, `mode: primary`, `permission: {edit: deny, bash: deny}`) y el contenido de `agent/prompt.md`.
-- `modulo/tools/oc.ts`: re-exporta `src/tools/oc.ts` (las mismas herramientas, no una copia).
+- `modulo/tools/oc.ts`: re-exporta solo las 5 herramientas de `src/tools/oc.ts` (las mismas, no una copia).
 - `modulo/skill/ordenes-compra/SKILL.md`: frontmatter (`name`, `description`) y el contenido de `src/knowledge/ordenes-compra.md`.
 
 `pruebas/modulo.test.ts` falla si alguna copia diverge de su fuente.
+
+## Entrega
+
+La rama de trabajo y despliegue es `develop`. Al entregar se integra en `main` mediante un PR `develop → main`, así que cualquiera de las dos ramas contiene la versión final.
