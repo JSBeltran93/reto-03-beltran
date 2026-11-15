@@ -8,31 +8,31 @@ Agente conversacional que lee el paquete de una solicitud de compra, lo valida c
 
 ## Inicio rápido
 
-Requisitos: Node.js 22 (`.nvmrc`) y npm. La clave del modelo solo se necesita para el chat.
+Requisitos: Node.js 22 (`.nvmrc`) y npm. La clave del modelo solo se necesita para el chat; es gratuita y se crea en Google AI Studio: https://aistudio.google.com/apikey.
 
 ```bash
 npm install          # instala la raíz y el workspace web/; configura los hooks de git
-cp .env.example .env # completar ANTHROPIC_API_KEY para usar el chat
+cp .env.example .env # pegar la clave en GEMINI_API_KEY
 npm run dev          # back (http://localhost:3000) + front (http://localhost:5173)
 ```
 
 ### Variables de entorno
 
-| Variable                 | Por defecto         | Uso                                                                        |
-| ------------------------ | ------------------- | -------------------------------------------------------------------------- |
-| `ANTHROPIC_API_KEY`      | —                   | Clave del modelo; solo en el backend (`.env` local o Variables de Railway) |
-| `LLM_MODELO`             | `claude-opus-5-5`   | Modelo principal                                                           |
-| `LLM_MODELO_RESPALDO`    | `claude-sonnet-5-5` | Modelo de respaldo si el principal falla                                   |
-| `LLM_TIMEOUT_MS`         | `60000`             | Tiempo máximo por llamada al modelo (el SDK reintenta 1 vez)               |
-| `MAX_ITERACIONES`        | `25`                | Tope de iteraciones herramienta → modelo por turno (CA1)                   |
-| `MAX_SEGUNDOS_TURNO`     | `240`               | Duración máxima de un turno (el front espera hasta 270 s)                  |
-| `MAX_SOLICITUDES_MINUTO` | `20`                | Límite de mensajes por minuto e IP (responde 429 con `Retry-After`)        |
-| `MAX_TOKENS_SESION`      | `200000`            | Tope de tokens por sesión                                                  |
-| `MAX_TOKENS_DIA`         | `3000000`           | Tope diario de tokens del servidor                                         |
-| `MAX_SESIONES`           | `200`               | Sesiones en memoria (se desaloja la de uso menos reciente)                 |
-| `PORT`                   | `3000`              | Puerto HTTP (Railway lo asigna)                                            |
+| Variable                 | Por defecto             | Uso                                                                                                                                |
+| ------------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `GEMINI_API_KEY`         | —                       | Clave de Google Gemini ([AI Studio](https://aistudio.google.com/apikey)); solo en el backend (`.env` local o Variables de Railway) |
+| `LLM_MODELO`             | `gemini-3.6-flash`      | Modelo principal                                                                                                                   |
+| `LLM_MODELO_RESPALDO`    | `gemini-3.5-flash-lite` | Modelo de respaldo ante caída, 429, timeout o rechazo del principal                                                                |
+| `LLM_TIMEOUT_MS`         | `60000`                 | Tiempo máximo por llamada al modelo                                                                                                |
+| `MAX_ITERACIONES`        | `25`                    | Tope de iteraciones herramienta → modelo por turno (CA1)                                                                           |
+| `MAX_SEGUNDOS_TURNO`     | `240`                   | Duración máxima de un turno (el front espera hasta 270 s)                                                                          |
+| `MAX_SOLICITUDES_MINUTO` | `20`                    | Límite de mensajes por minuto e IP (responde 429 con `Retry-After`)                                                                |
+| `MAX_TOKENS_SESION`      | `200000`                | Tope de tokens por sesión                                                                                                          |
+| `MAX_TOKENS_DIA`         | `3000000`               | Tope diario de tokens del servidor                                                                                                 |
+| `MAX_SESIONES`           | `200`                   | Sesiones en memoria (se desaloja la de uso menos reciente)                                                                         |
+| `PORT`                   | `3000`                  | Puerto HTTP (Railway lo asigna)                                                                                                    |
 
-`.env.example` es la referencia completa.
+`.env.example` es la referencia completa. El único proveedor es Google Gemini; `GET /api/health` muestra el proveedor y el modelo en uso.
 
 ## Demo sin modelo
 
@@ -67,13 +67,14 @@ Hooks de git: lint y formato al commitear, mensaje validado con commitlint, tipo
 
 ## API
 
-| Método | Ruta                | Cuerpo                                      | Respuesta                                                                                                                        |
-| ------ | ------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `POST` | `/api/chat`         | `{ "sessionId": "<uuid>", "message": "…" }` | `{ "reply", "toolCalls": [{ "nombre", "args", "ok", "resumen", "datos"? }], "needsConfirmation", "casoPendiente"?, "esError"? }` |
-| `GET`  | `/api/sessions/:id` | —                                           | `{ "id", "historial": [...], "needsConfirmation", "casoPendiente" }`; 404 si no existe                                           |
-| `GET`  | `/api/health`       | —                                           | `{ "ok": true, "provider", "model" }` (sin claves)                                                                               |
+| Método | Ruta                | Cuerpo                                      | Respuesta                                                                                                                               |
+| ------ | ------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/api/chat`         | `{ "sessionId": "<uuid>", "message": "…" }` | `{ "reply", "toolCalls": [{ "nombre", "args", "ok", "resumen", "datos"? }], "needsConfirmation", "casoPendiente"?, "esError"? }`        |
+| `GET`  | `/api/sessions/:id` | —                                           | `{ "id", "historial": [...], "needsConfirmation", "casoPendiente" }`; 404 si no existe                                                  |
+| `GET`  | `/api/health`       | —                                           | `{ "ok": true, "provider", "model" }` (sin claves)                                                                                      |
+| `GET`  | `/api/casos`        | —                                           | `{ "casos": [{ "caso", "solicitud_id", "descripcion", "proveedor", "valor_total", "moneda", "centro_costo", "estado", "numero_oc" }] }` |
 
-Ejemplo de `resumen`: `"apta · bloqueos: ninguna · confirmaciones: RC5"`. Las rutas viven en `RUTAS_API` (`src/comun/rutas-api.ts`), compartidas por back y front. `sessionId` debe ser un UUID y `message` tener entre 1 y 4000 caracteres. Cuerpo inválido o JSON roto → `400`; cuerpo de más de 32 kb → `413`; ruta `/api/*` inexistente → `404`; más de `MAX_SOLICITUDES_MINUTO` mensajes por minuto e IP → `429` con cabecera `Retry-After`; error inesperado → `500` con un mensaje genérico (sin trazas). Los errores del modelo o de una herramienta llegan como `reply` con `esError: true` y la sesión sigue activa.
+Ejemplo de `resumen`: `"apta · bloqueos: ninguna · confirmaciones: RC5"`. `GET /api/casos` alimenta la bandeja del front y es de solo lectura: `estado` es `sin_procesar`, `pendiente`, `bloqueada` o `creada`, según la última fila de `out/control.csv` de cada solicitud; si SAP ya tiene una orden para la solicitud, gana `creada` con su `numero_oc`. Los casos con paquete ilegible se omiten. Las rutas viven en `RUTAS_API` (`src/comun/rutas-api.ts`), compartidas por back y front. `sessionId` debe ser un UUID y `message` tener entre 1 y 4000 caracteres. Cuerpo inválido o JSON roto → `400`; cuerpo de más de 32 kb → `413`; ruta `/api/*` inexistente → `404`; más de `MAX_SOLICITUDES_MINUTO` mensajes por minuto e IP → `429` con cabecera `Retry-After`; error inesperado → `500` con un mensaje genérico (sin trazas). Los errores del modelo o de una herramienta llegan como `reply` con `esError: true` y la sesión sigue activa.
 
 ## Arquitectura
 
@@ -95,14 +96,13 @@ src/
 ├── server.ts                     API HTTP (crearAplicacion) y raíz de composición
 ├── configuracion.ts              variables de entorno validadas con zod
 ├── agente/                       ciclo, compuerta de confirmación, sesiones, bitácora
-├── llm/                          puerto AdaptadorLlm, Anthropic y respaldo
+├── llm/                          puerto AdaptadorLlm, gemini.ts, respaldo.ts y fabrica.ts
 ├── tools/oc.ts · tools/oc/       las 5 herramientas oc_* y el dominio
 ├── sap/                          puerto SapAdapter y SAP simulado
 ├── comun/                        resultado, errores, reloj, registrador, contratos y rutas
 └── knowledge/ordenes-compra.md   conocimiento del proceso
 web/                              chat: React 19, Vite, Tailwind, TanStack Query, axios
 pruebas/                          tests del back (los del front van junto a cada componente)
-documentacion/decisiones/         decisiones de arquitectura (ADR)
 fixtures/reto-03/                 insumos del reto (solo lectura)
 modulo/                           bonus: agente empaquetado para otras plataformas
 demo.ts                           verificación sin modelo
@@ -110,13 +110,12 @@ demo.ts                           verificación sin modelo
 
 ## Documentación
 
-- [`SOLUCION.md`](SOLUCION.md): planteamiento de la solución (12 secciones del PRD), incluido el uso de IA.
-- [`documentacion/decisiones/`](documentacion/decisiones): ADR 0001–0007.
+- [`SOLUCION.md`](SOLUCION.md): planteamiento de la solución (12 secciones del PRD), incluidas las decisiones (§8) y el uso de IA.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md): guía de desarrollo, ramas, commits y estándares.
 
 ## Despliegue
 
-Railway con configuración como código (`railway.json`): build por defecto de Railpack (instala dependencias y ejecuta `npm run build`), arranque `npm start`, health check en `/api/health`. Un push a `develop` despliega; alternativa equivalente: `railway up`. La clave se configura solo en Variables de Railway. El disco es efímero: `out/` se pierde al redesplegar ([ADR-0007](documentacion/decisiones/0007-despliegue-en-railway.md)).
+Railway con configuración como código (`railway.json`): build por defecto de Railpack (instala dependencias y ejecuta `npm run build`), arranque `npm start`, health check en `/api/health`. Un push a `develop` despliega; alternativa equivalente: `railway up`. La clave se configura solo en Variables de Railway. El disco es efímero: `out/` se pierde al redesplegar.
 
 ## Bonus: módulo reutilizable (`modulo/`)
 
