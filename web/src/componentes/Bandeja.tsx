@@ -32,8 +32,10 @@ function ErrorBandeja({
   alAbrirConversacion,
 }: Pick<PropiedadesBandeja, "alReintentar" | "alAbrirConversacion">) {
   return (
-    <div className={`${CLASES.tarjeta} space-y-3 p-4 text-sm`}>
-      <p role="alert">{TEXTOS_BANDEJA.error}</p>
+    <div className={`${CLASES.tarjeta} space-y-3 p-5 text-sm`}>
+      <p role="alert" className="font-medium">
+        {TEXTOS_BANDEJA.error}
+      </p>
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={alReintentar} className={CLASES.botonSecundario}>
           {TEXTOS_BANDEJA.reintentar}
@@ -82,11 +84,13 @@ function Contenido(props: PropiedadesBandeja) {
   }
   if (casos.length === 0) {
     return (
-      <p className={`${CLASES.tarjeta} p-4 text-sm text-texto-suave`}>{TEXTOS_BANDEJA.vacia}</p>
+      <p className={`${CLASES.tarjeta} p-6 text-center text-sm text-texto-suave`}>
+        {TEXTOS_BANDEJA.vacia}
+      </p>
     );
   }
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-2.5">
       {casos.map((resumen) => (
         <li key={resumen.caso}>
           <FilaCaso
@@ -110,9 +114,9 @@ function Contenido(props: PropiedadesBandeja) {
  */
 export function Bandeja(props: PropiedadesBandeja) {
   return (
-    <section aria-labelledby={ID_TITULO} className="flex w-full flex-col gap-3">
+    <section aria-labelledby={ID_TITULO} className="flex w-full flex-col gap-4">
       <div className="flex items-baseline justify-between gap-2">
-        <h2 id={ID_TITULO} className="text-xl font-semibold">
+        <h2 id={ID_TITULO} className="text-xl font-semibold tracking-tight">
           {TEXTOS_BANDEJA.titulo}
         </h2>
         {props.casos && (

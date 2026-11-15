@@ -5,7 +5,7 @@ import { CLASES } from "./clases";
 import { TEXTOS_COMPOSITOR } from "./textos";
 
 const CLASE_TEXTO =
-  "anillo-foco min-h-12 flex-1 resize-none rounded-xl border border-borde-fuerte bg-superficie px-3 py-2.5 text-sm leading-6 text-texto placeholder:text-texto-suave aria-disabled:opacity-60";
+  "anillo-foco min-h-12 flex-1 resize-none rounded-2xl border border-borde-fuerte bg-superficie px-4 py-2.5 shadow-suave text-sm leading-6 text-texto placeholder:text-texto-suave aria-disabled:opacity-60";
 const CLASE_BOTON = `${CLASES.botonPrimario} py-3`;
 const TECLA_ENVIAR = "Enter";
 const FILAS_TEXTO = 2;
