@@ -20,6 +20,7 @@ export function crearAdaptadoresLlm(
       apiKey: configuracion.GEMINI_API_KEY,
       modelo,
       timeoutMs: configuracion.LLM_TIMEOUT_MS,
+      razonamiento: configuracion.LLM_RAZONAMIENTO,
     });
   return new AdaptadorConRespaldo(
     [configuracion.LLM_MODELO, ...configuracion.LLM_MODELOS_RESPALDO].map(crear),
