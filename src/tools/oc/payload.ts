@@ -54,33 +54,60 @@ function excepciones(validacion: Validacion): OrdenCompra["excepciones"] {
   }));
 }
 
-function trazar(paquete: Paquete, validacion: Validacion): Trazabilidad {
+/** Fuentes permitidas por el PRD (HU-3) para trazar cada valor del payload. */
+const FUENTES = {
+  solicitud: "solicitud",
+  cotizacion: "cotizacion",
+  maestroProveedores: "maestro.proveedores",
+  derivado: "derivado",
+} as const;
+
+function trazarCabecera(paquete: Paquete, validacion: Validacion): Trazabilidad {
   const { solicitud } = paquete;
-  const origen = (campo: "indicador_iva" | "condiciones_pago"): { fuente: string } =>
-    solicitud[campo] === undefined ? { fuente: "maestro.proveedores" } : { fuente: "solicitud" };
+  const conCotizacion = paquete.cotizacion !== null;
   return {
-    "referencia.solicitud_id": { fuente: "solicitud" },
-    "referencia.correo_id": { fuente: "correo" },
-    "referencia.cotizacion_ref": { fuente: "cotizacion" },
-    sociedad: { fuente: "derivado", detalle: "constante de la sociedad" },
-    organizacion_compras: { fuente: "derivado", detalle: "constante de la organización" },
+    "referencia.solicitud_id": { fuente: FUENTES.solicitud },
+    "referencia.correo_id": { fuente: FUENTES.solicitud, detalle: "correo de la solicitud" },
+    "referencia.cotizacion_ref": conCotizacion
+      ? { fuente: FUENTES.cotizacion }
+      : { fuente: FUENTES.derivado, detalle: "sin cotización: null" },
+    sociedad: { fuente: FUENTES.derivado, detalle: "constante de la sociedad" },
+    organizacion_compras: { fuente: FUENTES.derivado, detalle: "constante de la organización" },
     proveedor: {
-      fuente: "maestro.proveedores",
+      fuente: FUENTES.maestroProveedores,
       detalle: validacion.derivados.proveedor?.nit ?? "",
     },
-    moneda: { fuente: "solicitud" },
-    condiciones_pago: origen("condiciones_pago"),
-    "aprobador.email": { fuente: "aprobacion" },
-    "aprobador.fecha_aprobacion": { fuente: "aprobacion" },
-    "aprobador.evidencia_sha256": { fuente: "derivado", detalle: "sha256 de la evidencia" },
-    "posiciones[0].descripcion": { fuente: "solicitud", detalle: solicitud.descripcion },
-    "posiciones[0].cantidad": { fuente: "solicitud" },
-    "posiciones[0].unidad": { fuente: "derivado", detalle: "inferida de la descripción" },
-    "posiciones[0].precio_unitario": { fuente: "solicitud", detalle: "valor_unitario" },
-    "posiciones[0].centro_costo": { fuente: "solicitud" },
-    "posiciones[0].subarea": { fuente: "solicitud" },
-    "posiciones[0].indicador_iva": origen("indicador_iva"),
+    moneda: { fuente: FUENTES.solicitud },
+    condiciones_pago:
+      solicitud.condiciones_pago === undefined
+        ? { fuente: FUENTES.maestroProveedores }
+        : { fuente: FUENTES.solicitud },
+    "aprobador.email": { fuente: FUENTES.solicitud, detalle: "aprobación adjunta" },
+    "aprobador.fecha_aprobacion": { fuente: FUENTES.solicitud, detalle: "aprobación adjunta" },
+    "aprobador.evidencia_sha256": { fuente: FUENTES.derivado, detalle: "sha256 de la evidencia" },
+    excepciones: { fuente: FUENTES.derivado, detalle: "confirmaciones de las reglas de control" },
   };
+}
+
+function trazarPosicion(paquete: Paquete): Trazabilidad {
+  const { solicitud } = paquete;
+  return {
+    "posiciones[0].numero": { fuente: FUENTES.derivado, detalle: "primera posición de SAP" },
+    "posiciones[0].descripcion": { fuente: FUENTES.solicitud, detalle: solicitud.descripcion },
+    "posiciones[0].cantidad": { fuente: FUENTES.solicitud },
+    "posiciones[0].unidad": { fuente: FUENTES.derivado, detalle: "inferida de la descripción" },
+    "posiciones[0].precio_unitario": { fuente: FUENTES.solicitud, detalle: "valor_unitario" },
+    "posiciones[0].centro_costo": { fuente: FUENTES.solicitud },
+    "posiciones[0].subarea": { fuente: FUENTES.solicitud },
+    "posiciones[0].indicador_iva":
+      solicitud.indicador_iva === undefined
+        ? { fuente: FUENTES.maestroProveedores }
+        : { fuente: FUENTES.solicitud },
+  };
+}
+
+function trazar(paquete: Paquete, validacion: Validacion): Trazabilidad {
+  return { ...trazarCabecera(paquete, validacion), ...trazarPosicion(paquete) };
 }
 
 function posicion(paquete: Paquete, validacion: Validacion): Record<string, unknown> {
@@ -115,7 +142,7 @@ export function construirOrden(
     return fallo("NO_APTA", "La solicitud tiene bloqueos y no puede convertirse en OC.");
   }
   const extraida = cotizacion ? extraerCotizacion(cotizacion.texto) : null;
-  const orden = EsquemaOrdenCompra.parse({
+  const validada = EsquemaOrdenCompra.safeParse({
     referencia: {
       solicitud_id: solicitud.solicitud_id,
       correo_id: correo.id,
@@ -134,7 +161,10 @@ export function construirOrden(
     posiciones: [posicion(paquete, validacion)],
     excepciones: excepciones(validacion),
   });
-  return exito({ orden, trazabilidad: trazar(paquete, validacion) });
+  if (!validada.success) {
+    return fallo("ERROR_INTERNO", "La orden construida no cumple el esquema de SAP.");
+  }
+  return exito({ orden: validada.data, trazabilidad: trazar(paquete, validacion) });
 }
 
 /**
