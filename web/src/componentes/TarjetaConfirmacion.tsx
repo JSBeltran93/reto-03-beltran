@@ -10,6 +10,8 @@ const ID_TITULO = "titulo-confirmacion";
 export interface PropiedadesTarjetaConfirmacion {
   /** Confirmaciones pendientes de la última validación (vacío si no hay datos). */
   readonly confirmaciones: readonly Hallazgo[];
+  /** Caso cuya OC se confirma; sin él, el título es genérico. */
+  readonly caso: string | null;
   /** Deshabilita los botones mientras hay una petición en curso. */
   readonly deshabilitado: boolean;
   readonly alConfirmar: () => void;
@@ -20,7 +22,7 @@ function BotonesConfirmacion({
   deshabilitado,
   alConfirmar,
   alCancelar,
-}: Omit<PropiedadesTarjetaConfirmacion, "confirmaciones">) {
+}: Omit<PropiedadesTarjetaConfirmacion, "confirmaciones" | "caso">) {
   return (
     <div className="mt-4 flex flex-wrap gap-2">
       <button
@@ -47,11 +49,12 @@ function BotonesConfirmacion({
  * Tarjeta destacada cuando el agente espera la confirmación del usuario (PRD §6.1, CA3):
  * lista lo que hay que confirmar con sus valores y ofrece "Confirmar y crear OC" o
  * "Cancelar", que se envían al agente como "Confirmo" o "Cancelar".
- * @param props - confirmaciones, acciones y estado deshabilitado
+ * @param props - caso, confirmaciones, acciones y estado deshabilitado
  * @returns la tarjeta
  */
 export function TarjetaConfirmacion({
   confirmaciones,
+  caso,
   deshabilitado,
   alConfirmar,
   alCancelar,
@@ -63,7 +66,7 @@ export function TarjetaConfirmacion({
     >
       <h2 id={ID_TITULO} className="text-base font-semibold text-aviso">
         <span aria-hidden="true">⚠️ </span>
-        {TEXTOS_CONFIRMACION.titulo}
+        {caso === null ? TEXTOS_CONFIRMACION.titulo : TEXTOS_CONFIRMACION.tituloCaso(caso)}
       </h2>
       <p className="mt-1 text-sm text-texto">{TEXTOS_CONFIRMACION.ayuda}</p>
       {confirmaciones.length > 0 && (

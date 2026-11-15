@@ -1,12 +1,20 @@
-import type { EntradaHistorial, RespuestaChat } from "@contratos/contratos-api";
+import type { EntradaHistorial, RespuestaChat, VistaSesion } from "@contratos/contratos-api";
 
-import { HERRAMIENTAS } from "./herramientas";
+/**
+ * Mensaje con el que el servidor informa que falta la clave del modelo o no es válida
+ * (código LLM_CLAVE_INVALIDA). El chat no envía el código, solo este texto.
+ */
+export const MENSAJE_CLAVE_INVALIDA = "La clave del modelo no es válida o falta.";
 
 /** Error visible en la interfaz. */
 export interface ErrorVisible {
   readonly mensaje: string;
   /** Si tiene sentido ofrecer "Reintentar". */
   readonly reintentable: boolean;
+  /** Segundos a esperar antes de poder reintentar (límite de solicitudes, 429). */
+  readonly esperaSegundos?: number;
+  /** true si el error ya quedó en el historial (respuesta del agente marcada como error). */
+  readonly enHistorial?: boolean;
 }
 
 /** Estado de la conversación en la interfaz. */
@@ -15,6 +23,10 @@ export interface EstadoConversacion {
   readonly entradas: readonly EntradaHistorial[];
   readonly error: ErrorVisible | null;
   readonly esperaConfirmacion: boolean;
+  /** Caso cuya OC espera confirmación, según el servidor (null si no se sabe o no hay). */
+  readonly casoPendiente: string | null;
+  /** true si la última respuesta indicó que falta la clave del modelo o no es válida. */
+  readonly claveInvalida: boolean;
   readonly ultimoMensaje: string | null;
 }
 
@@ -24,11 +36,7 @@ export type AccionConversacion =
   | { readonly tipo: "REINTENTAR" }
   | { readonly tipo: "RESPUESTA"; readonly sessionId: string; readonly respuesta: RespuestaChat }
   | { readonly tipo: "FALLO"; readonly sessionId: string; readonly error: ErrorVisible }
-  | {
-      readonly tipo: "HIDRATAR";
-      readonly sessionId: string;
-      readonly historial: readonly EntradaHistorial[];
-    }
+  | { readonly tipo: "HIDRATAR"; readonly sessionId: string; readonly sesion: VistaSesion }
   | { readonly tipo: "NUEVA_SESION"; readonly sessionId: string };
 
 /**
@@ -37,32 +45,15 @@ export type AccionConversacion =
  * @returns estado vacío
  */
 export function estadoInicial(sessionId: string): EstadoConversacion {
-  return { sessionId, entradas: [], error: null, esperaConfirmacion: false, ultimoMensaje: null };
-}
-
-function ultimoIndiceDe(historial: readonly EntradaHistorial[], nombre: string): number {
-  return historial.findLastIndex(
-    (entrada) =>
-      entrada.tipo === "herramienta" && entrada.llamada.ok && entrada.llamada.nombre === nombre,
-  );
-}
-
-/**
- * Deduce, con una heurística, si un historial recuperado del servidor quedó esperando
- * confirmación: termina en un mensaje del agente, hubo un `oc_construir_payload` correcto
- * y no hubo un `oc_crear` correcto después. El servidor no expone su estado de
- * confirmación, así que es la mejor aproximación sin cambiar el contrato.
- * @param historial - historial de la sesión
- * @returns true si conviene mostrar el aviso de confirmación
- */
-export function esperaConfirmacionEnHistorial(historial: readonly EntradaHistorial[]): boolean {
-  const indicePayload = ultimoIndiceDe(historial, HERRAMIENTAS.construirPayload);
-  const terminaEnAgente = historial.at(-1)?.tipo === "asistente";
-  return (
-    terminaEnAgente &&
-    indicePayload >= 0 &&
-    indicePayload > ultimoIndiceDe(historial, HERRAMIENTAS.crear)
-  );
+  return {
+    sessionId,
+    entradas: [],
+    error: null,
+    esperaConfirmacion: false,
+    casoPendiente: null,
+    claveInvalida: false,
+    ultimoMensaje: null,
+  };
 }
 
 function conRespuesta(estado: EstadoConversacion, respuesta: RespuestaChat): EstadoConversacion {
@@ -70,18 +61,27 @@ function conRespuesta(estado: EstadoConversacion, respuesta: RespuestaChat): Est
     tipo: "herramienta",
     llamada,
   }));
-  if (respuesta.esError === true) {
-    return {
-      ...estado,
-      entradas: [...estado.entradas, ...herramientas],
-      error: { mensaje: respuesta.reply, reintentable: true },
-      esperaConfirmacion: false,
-    };
-  }
+  const esError = respuesta.esError === true;
+  const cierre: EntradaHistorial = esError
+    ? { tipo: "error", texto: respuesta.reply }
+    : { tipo: "asistente", texto: respuesta.reply };
   return {
     ...estado,
-    entradas: [...estado.entradas, ...herramientas, { tipo: "asistente", texto: respuesta.reply }],
+    entradas: [...estado.entradas, ...herramientas, cierre],
+    error: esError ? { mensaje: respuesta.reply, reintentable: true, enHistorial: true } : null,
     esperaConfirmacion: respuesta.needsConfirmation,
+    casoPendiente: respuesta.casoPendiente ?? null,
+    claveInvalida: esError && respuesta.reply === MENSAJE_CLAVE_INVALIDA,
+  };
+}
+
+function conSesion(estado: EstadoConversacion, sesion: VistaSesion): EstadoConversacion {
+  return {
+    ...estado,
+    entradas: sesion.historial,
+    error: null,
+    esperaConfirmacion: sesion.needsConfirmation,
+    casoPendiente: sesion.casoPendiente,
   };
 }
 
@@ -113,13 +113,7 @@ export function reducirConversacion(
     case "FALLO":
       return accion.sessionId === estado.sessionId ? { ...estado, error: accion.error } : estado;
     case "HIDRATAR":
-      if (accion.sessionId !== estado.sessionId) return estado;
-      return {
-        ...estado,
-        entradas: accion.historial,
-        error: null,
-        esperaConfirmacion: esperaConfirmacionEnHistorial(accion.historial),
-      };
+      return accion.sessionId === estado.sessionId ? conSesion(estado, accion.sesion) : estado;
     case "NUEVA_SESION":
       return estadoInicial(accion.sessionId);
   }
