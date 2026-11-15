@@ -16,7 +16,7 @@ export default function Aplicacion() {
   const { estado, cargando, enviar, reintentar, nuevaSesion } = useConversacion();
   const salud = useSalud();
   const { error, entradas } = estado;
-  const mostrarConfirmacion = estado.esperaConfirmacion && !cargando && error === null;
+  const mostrarConfirmacion = estado.esperaConfirmacion && !cargando;
   const marcadorFin = useDesplazarAlFinal([entradas.length, cargando, mostrarConfirmacion, error]);
 
   return (
@@ -26,6 +26,7 @@ export default function Aplicacion() {
         modelo={salud.data?.model}
         deshabilitado={cargando}
         alNuevaSesion={nuevaSesion}
+        claveInvalida={estado.claveInvalida}
       />
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-6">
         {entradas.length === 0 ? (
@@ -37,7 +38,8 @@ export default function Aplicacion() {
           cargando={cargando}
           error={error}
           mostrarConfirmacion={mostrarConfirmacion}
-          confirmaciones={confirmacionesPendientes(entradas)}
+          confirmaciones={confirmacionesPendientes(entradas, estado.casoPendiente)}
+          caso={estado.casoPendiente}
           alReintentar={reintentar}
           alEnviar={enviar}
         />

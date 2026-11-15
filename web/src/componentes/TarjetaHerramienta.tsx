@@ -47,6 +47,39 @@ function IconoEstado({ ok }: { readonly ok: boolean }) {
 }
 
 /**
+ * Detalles plegables de una llamada: resumen, argumentos y datos completos en JSON.
+ * @param props - la llamada
+ * @returns los detalles
+ */
+function DetallesLlamada({ llamada }: PropiedadesTarjetaHerramienta) {
+  return (
+    <details className="text-xs">
+      <summary className="anillo-foco w-fit cursor-pointer rounded text-texto-suave hover:text-texto">
+        {TEXTOS_HERRAMIENTA.detalles}
+      </summary>
+      <p className="mt-2 font-semibold">{TEXTOS_HERRAMIENTA.resumen}</p>
+      <p className="mb-2 wrap-anywhere">{llamada.resumen}</p>
+      <p className="font-semibold">{TEXTOS_HERRAMIENTA.argumentos}</p>
+      <BloqueJson valor={llamada.args} />
+      {llamada.datos !== undefined && (
+        <>
+          <p className="mt-2 font-semibold">{TEXTOS_HERRAMIENTA.datos}</p>
+          <BloqueJson valor={llamada.datos} />
+        </>
+      )}
+    </details>
+  );
+}
+
+function BloqueJson({ valor }: { readonly valor: unknown }) {
+  return (
+    <pre className="mt-1 max-h-96 overflow-auto rounded-xl bg-elevada p-3 font-mono break-all whitespace-pre-wrap">
+      {JSON.stringify(valor, null, 2)}
+    </pre>
+  );
+}
+
+/**
  * Paso de la línea de tiempo del turno (PRD §6.1): ícono de estado, nombre del paso,
  * herramienta, caso y resultado resumido; el resultado enriquecido (controles, OC o
  * creación) a la vista, y en los detalles el resultado completo y los argumentos.
@@ -71,17 +104,7 @@ export function TarjetaHerramienta({ llamada }: PropiedadesTarjetaHerramienta) {
         </p>
         <p className="text-sm text-texto-suave wrap-anywhere">{llamada.resumen}</p>
         {resultado && <ResultadoEnriquecido resultado={resultado} />}
-        <details className="text-xs">
-          <summary className="anillo-foco w-fit cursor-pointer rounded text-texto-suave hover:text-texto">
-            {TEXTOS_HERRAMIENTA.detalles}
-          </summary>
-          <p className="mt-2 font-semibold">{TEXTOS_HERRAMIENTA.resumen}</p>
-          <p className="mb-2 wrap-anywhere">{llamada.resumen}</p>
-          <p className="font-semibold">{TEXTOS_HERRAMIENTA.argumentos}</p>
-          <pre className="mt-1 max-h-64 overflow-auto rounded-xl bg-elevada p-3 font-mono break-all whitespace-pre-wrap">
-            {JSON.stringify(llamada.args, null, 2)}
-          </pre>
-        </details>
+        <DetallesLlamada llamada={llamada} />
       </div>
     </div>
   );

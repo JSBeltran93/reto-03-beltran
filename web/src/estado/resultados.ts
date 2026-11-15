@@ -43,12 +43,22 @@ const EsquemaOrdenVista = z.object({
       }),
     )
     .min(1),
+  excepciones: z.array(z.object({ codigo: z.string(), detalle: z.string() })).default([]),
 });
 
 /** Datos de `oc_construir_payload` que se dibujan como tabla de la OC. */
 export const EsquemaDatosPayload = z.object({ orden: EsquemaOrdenVista });
 /** Datos de `oc_construir_payload`. */
 export type DatosPayload = z.infer<typeof EsquemaDatosPayload>;
+
+/**
+ * Total de la OC: suma de cantidad × precio unitario de todas las posiciones.
+ * @param datos - datos de `oc_construir_payload`
+ * @returns el total en la moneda de la orden
+ */
+export function totalOrden(datos: DatosPayload): number {
+  return datos.orden.posiciones.reduce((suma, p) => suma + p.cantidad * p.precio_unitario, 0);
+}
 
 /** Datos de `oc_crear` que se dibujan como tarjeta de éxito. */
 export const EsquemaDatosCreacion = z.object({
@@ -103,19 +113,36 @@ export function resultadoRico(llamada: VistaLlamada): ResultadoRico | null {
   }
 }
 
+const EsquemaArgsCaso = z.object({ caso: z.string() });
+
 /**
- * Confirmaciones pendientes según la última validación correcta del historial.
- * @param entradas - historial de la conversación
- * @returns las confirmaciones (vacío si no hay datos de validación)
+ * Caso sobre el que se llamó una herramienta (argumento `caso`).
+ * @param llamada - llamada a herramienta
+ * @returns el nombre del caso o null si los argumentos no lo traen
  */
-export function confirmacionesPendientes(entradas: readonly EntradaHistorial[]): Hallazgo[] {
-  for (let i = entradas.length - 1; i >= 0; i--) {
-    const entrada = entradas[i];
-    if (entrada?.tipo !== "herramienta" || entrada.llamada.nombre !== HERRAMIENTAS.validar) {
-      continue;
-    }
-    const rico = resultadoRico(entrada.llamada);
-    return rico?.tipo === "validacion" ? rico.datos.confirmaciones : [];
-  }
-  return [];
+export function casoDeLlamada(llamada: VistaLlamada): string | null {
+  const args = EsquemaArgsCaso.safeParse(llamada.args);
+  return args.success ? args.data.caso : null;
+}
+
+/**
+ * Confirmaciones pendientes según la última validación correcta del caso.
+ * @param entradas - historial de la conversación
+ * @param caso - caso pendiente de confirmación; null toma la última validación de cualquier caso
+ * @returns las confirmaciones (vacío si no hay datos de validación de ese caso)
+ */
+export function confirmacionesPendientes(
+  entradas: readonly EntradaHistorial[],
+  caso: string | null,
+): Hallazgo[] {
+  const validacion = entradas.findLast(
+    (entrada) =>
+      entrada.tipo === "herramienta" &&
+      entrada.llamada.ok &&
+      entrada.llamada.nombre === HERRAMIENTAS.validar &&
+      (caso === null || casoDeLlamada(entrada.llamada) === caso),
+  );
+  if (validacion?.tipo !== "herramienta") return [];
+  const rico = resultadoRico(validacion.llamada);
+  return rico?.tipo === "validacion" ? rico.datos.confirmaciones : [];
 }

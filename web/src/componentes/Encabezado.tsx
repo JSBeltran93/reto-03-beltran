@@ -13,7 +13,15 @@ export interface PropiedadesEncabezado {
   readonly deshabilitado: boolean;
   /** Inicia una conversación nueva. */
   readonly alNuevaSesion: () => void;
+  /** true si la última respuesta indicó que la clave del modelo falta o no es válida. */
+  readonly claveInvalida?: boolean;
 }
+
+/** Presentación de la píldora cuando el servidor responde pero la clave del modelo falla. */
+const PRESENTACION_CLAVE_INVALIDA = {
+  tono: "aviso",
+  texto: TEXTOS_ENCABEZADO.claveInvalida,
+} as const;
 
 /** Tono y texto de la píldora de estado según la salud del servidor. */
 const PRESENTACION_SALUD: Readonly<Record<QueryStatus, { tono: Tono; texto: string }>> = {
@@ -21,6 +29,29 @@ const PRESENTACION_SALUD: Readonly<Record<QueryStatus, { tono: Tono; texto: stri
   error: { tono: "peligro", texto: TEXTOS_ENCABEZADO.sinServidor },
   success: { tono: "exito", texto: "" },
 };
+
+/**
+ * Píldora con el estado del servidor (texto, no solo color): el modelo si todo está bien,
+ * o el problema (conectando, sin servidor, clave del modelo inválida).
+ * @param props - estado de la salud, modelo y si la clave falló
+ * @returns la píldora
+ */
+function PildoraEstado({
+  estadoSalud,
+  modelo,
+  claveInvalida,
+}: Pick<PropiedadesEncabezado, "estadoSalud" | "modelo"> & { readonly claveInvalida: boolean }) {
+  const conectado = estadoSalud === "success";
+  const { tono, texto } =
+    conectado && claveInvalida ? PRESENTACION_CLAVE_INVALIDA : PRESENTACION_SALUD[estadoSalud];
+  return (
+    <p className={`${CLASES.ficha} ${TONOS[tono]} ml-auto max-w-40 truncate`}>
+      <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-current" />
+      <span className="sr-only">{TEXTOS_ENCABEZADO.estadoServidor}</span>
+      {conectado && !claveInvalida ? modelo : texto}
+    </p>
+  );
+}
 
 /**
  * Barra superior: marca y propósito del producto, píldora con el estado del servidor
@@ -33,8 +64,8 @@ export function Encabezado({
   modelo,
   deshabilitado,
   alNuevaSesion,
+  claveInvalida = false,
 }: PropiedadesEncabezado) {
-  const { tono, texto } = PRESENTACION_SALUD[estadoSalud];
   return (
     <header className="sticky top-0 z-10 border-b border-borde bg-superficie/90 backdrop-blur">
       <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-3">
@@ -48,11 +79,7 @@ export function Encabezado({
           <h1 className="text-base leading-tight font-semibold">{TEXTOS_ENCABEZADO.titulo}</h1>
           <p className="truncate text-xs text-texto-suave">{TEXTOS_ENCABEZADO.subtitulo}</p>
         </div>
-        <p className={`${CLASES.ficha} ${TONOS[tono]} ml-auto max-w-40 truncate`}>
-          <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-current" />
-          <span className="sr-only">{TEXTOS_ENCABEZADO.estadoServidor}</span>
-          {estadoSalud === "success" ? modelo : texto}
-        </p>
+        <PildoraEstado estadoSalud={estadoSalud} modelo={modelo} claveInvalida={claveInvalida} />
         <button
           type="button"
           onClick={alNuevaSesion}

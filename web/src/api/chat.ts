@@ -27,9 +27,9 @@ export async function enviarMensaje(solicitud: SolicitudChat): Promise<Respuesta
 }
 
 /**
- * Obtiene el historial que el servidor guarda para una sesión.
+ * Obtiene el historial y el estado de confirmación que el servidor guarda para una sesión.
  * @param sessionId - identificador de la sesión
- * @returns el historial, o null si el servidor no conoce la sesión (404)
+ * @returns la sesión, o null si el servidor no la conoce (404)
  * @throws ErrorApi si la petición falla o la respuesta no cumple el contrato
  */
 export async function obtenerSesion(sessionId: string): Promise<VistaSesion | null> {

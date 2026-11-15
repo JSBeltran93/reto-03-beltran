@@ -1,14 +1,25 @@
 import { AxiosError, AxiosHeaders } from "axios";
 import { describe, expect, it } from "vitest";
 
-import { convertirError, ErrorApi, ESTADOS_HTTP, MENSAJES_ERROR_API } from "./cliente";
+import {
+  convertirError,
+  ErrorApi,
+  ESTADOS_HTTP,
+  MENSAJES_ERROR_API,
+  segundosParaReintentar,
+  TIEMPO_ESPERA_MS,
+} from "./cliente";
 
-const conRespuesta = (status: number, data: unknown): AxiosError =>
+const conRespuesta = (
+  status: number,
+  data: unknown,
+  headers: Record<string, string> = {},
+): AxiosError =>
   new AxiosError("fallo", "ERR_BAD_RESPONSE", undefined, undefined, {
     status,
     statusText: "Error",
     data,
-    headers: {},
+    headers,
     config: { headers: new AxiosHeaders() },
   });
 
@@ -64,5 +75,38 @@ describe("convertirError", () => {
     expect(convertirError(conRespuesta(ESTADOS_HTTP.demasiadasSolicitudes, {})).reintentable).toBe(
       true,
     );
+  });
+
+  it.each([
+    ["429 con Retry-After", ESTADOS_HTTP.demasiadasSolicitudes, { "retry-after": "30" }, 30],
+    ["429 sin Retry-After", ESTADOS_HTTP.demasiadasSolicitudes, {}, undefined],
+    [
+      "500 con Retry-After (se ignora)",
+      ESTADOS_HTTP.errorServidor,
+      { "retry-after": "30" },
+      undefined,
+    ],
+  ])("%s → espera %s", (_nombre, estado, cabeceras, esperado) => {
+    expect(convertirError(conRespuesta(estado, {}, cabeceras)).esperaSegundos).toBe(esperado);
+  });
+});
+
+describe("segundosParaReintentar", () => {
+  it.each([
+    [{ "retry-after": "12" }, 12],
+    [{ "retry-after": "0" }, undefined],
+    [{ "retry-after": "Wed, 21 Oct 2026 07:28:00 GMT" }, undefined],
+    [{}, undefined],
+    [null, undefined],
+  ])("%j → %s", (cabeceras, esperado) => {
+    expect(segundosParaReintentar(cabeceras)).toBe(esperado);
+  });
+});
+
+describe("TIEMPO_ESPERA_MS", () => {
+  it("supera el máximo de un turno del servidor (240 s) para no cortar turnos válidos", () => {
+    const MAX_SEGUNDOS_TURNO_MS = 240_000;
+
+    expect(TIEMPO_ESPERA_MS).toBeGreaterThan(MAX_SEGUNDOS_TURNO_MS);
   });
 });
