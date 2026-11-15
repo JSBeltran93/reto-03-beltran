@@ -60,22 +60,23 @@ function reglas(hallazgos: unknown): string {
     : "ninguna";
 }
 
+type Datos = Record<string, unknown>;
+
+/** Resumen de cada herramienta para la línea de tiempo del chat, por el nombre que ve el modelo. */
+const RESUMIDORES: Readonly<Record<string, (d: Datos) => string>> = {
+  [NOMBRES_HERRAMIENTAS.validar]: (d) =>
+    `${d.apta ? "apta" : "no apta"} · bloqueos: ${reglas(d.bloqueos)} · confirmaciones: ${reglas(d.confirmaciones)}`,
+  [NOMBRES_HERRAMIENTAS.construirPayload]: (d) =>
+    `OC lista para SAP · trazabilidad en ${String(d.ruta_trazabilidad)}`,
+  [NOMBRES_HERRAMIENTAS.generarEvidencia]: (d) => `evidencia en ${String(d.ruta)}`,
+  [NOMBRES_HERRAMIENTAS.crear]: (d) =>
+    `OC ${String(d.numero_oc)}${d.idempotente ? " (ya existía)" : ""}`,
+  [NOMBRES_HERRAMIENTAS.leerPaquete]: (d) => faltantes(d.faltantes),
+};
+
 function resumir(nombre: string, data: unknown): string {
-  const d = (data ?? {}) as Record<string, unknown>;
-  switch (nombre) {
-    case NOMBRES_HERRAMIENTAS.validar:
-      return `${d.apta ? "apta" : "no apta"} · bloqueos: ${reglas(d.bloqueos)} · confirmaciones: ${reglas(d.confirmaciones)}`;
-    case NOMBRES_HERRAMIENTAS.construirPayload:
-      return `OC lista para SAP · trazabilidad en ${String(d.ruta_trazabilidad)}`;
-    case NOMBRES_HERRAMIENTAS.generarEvidencia:
-      return `evidencia en ${String(d.ruta)}`;
-    case NOMBRES_HERRAMIENTAS.crear:
-      return `OC ${String(d.numero_oc)}${d.idempotente ? " (ya existía)" : ""}`;
-    case NOMBRES_HERRAMIENTAS.leerPaquete:
-      return faltantes(d.faltantes);
-    default:
-      return RESUMEN_GENERICO;
-  }
+  const resumidor = RESUMIDORES[nombre];
+  return resumidor ? resumidor((data ?? {}) as Datos) : RESUMEN_GENERICO;
 }
 
 /**
