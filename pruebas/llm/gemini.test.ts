@@ -4,9 +4,11 @@ import {
   FunctionCallingConfigMode,
   type GenerateContentParameters,
   GenerateContentResponse,
+  ThinkingLevel,
 } from "@google/genai";
 import { describe, expect, it } from "vitest";
 
+import type { NivelRazonamiento } from "../../src/configuracion";
 import type { MensajeLlm } from "../../src/llm/adapter";
 import {
   aContenidosGemini,
@@ -14,6 +16,8 @@ import {
   aRespuestaGemini,
   FIRMA_RAZONAMIENTO_FICTICIA,
   type GenerarContenido,
+  MAX_TOKENS_RESPUESTA,
+  TEMPERATURA,
   traducirErrorGemini,
 } from "../../src/llm/gemini";
 
@@ -27,6 +31,9 @@ const HERRAMIENTA = {
   descripcion: "Lee el paquete",
   esquema: { type: "object", properties: { caso: { type: "string" } } },
 };
+
+/** Opciones mínimas del adaptador (sin red: cada prueba inyecta su generador). */
+const OPCIONES = { apiKey: "k", modelo: "m", timeoutMs: 1, razonamiento: "bajo" } as const;
 
 /** Generador falso que guarda los parámetros recibidos y devuelve una respuesta fija. */
 function generadorFijo(respuesta: GenerateContentResponse) {
@@ -232,7 +239,7 @@ describe("AdaptadorGemini", () => {
 
   it("envía el system prompt, las herramientas y el modo AUTO", async () => {
     const { generar, recibidos } = generadorFijo(final);
-    const adaptador = new AdaptadorGemini({ apiKey: "k", modelo: "m", timeoutMs: 1, generar });
+    const adaptador = new AdaptadorGemini({ ...OPCIONES, generar });
 
     const r = await adaptador.enviar(
       [
@@ -263,9 +270,35 @@ describe("AdaptadorGemini", () => {
     });
   });
 
+  it.each<[NivelRazonamiento, ThinkingLevel]>([
+    ["minimo", ThinkingLevel.MINIMAL],
+    ["bajo", ThinkingLevel.LOW],
+    ["medio", ThinkingLevel.MEDIUM],
+    ["alto", ThinkingLevel.HIGH],
+  ])("traduce el razonamiento %s a thinkingLevel %s", async (razonamiento, nivel) => {
+    const { generar, recibidos } = generadorFijo(final);
+    const adaptador = new AdaptadorGemini({ ...OPCIONES, razonamiento, generar });
+
+    await adaptador.enviar([{ rol: "usuario", contenido: "hola" }], []);
+
+    expect(recibidos[0]?.config?.thinkingConfig).toEqual({ thinkingLevel: nivel });
+  });
+
+  it("acota la salida y fija la temperatura con sus constantes", async () => {
+    const { generar, recibidos } = generadorFijo(final);
+    const adaptador = new AdaptadorGemini({ ...OPCIONES, generar });
+
+    await adaptador.enviar([{ rol: "usuario", contenido: "hola" }], []);
+
+    expect(recibidos[0]?.config).toMatchObject({
+      maxOutputTokens: MAX_TOKENS_RESPUESTA,
+      temperature: TEMPERATURA,
+    });
+  });
+
   it("con sinLlamadas mantiene las herramientas pero fija el modo NONE", async () => {
     const { generar, recibidos } = generadorFijo(final);
-    const adaptador = new AdaptadorGemini({ apiKey: "k", modelo: "m", timeoutMs: 1, generar });
+    const adaptador = new AdaptadorGemini({ ...OPCIONES, generar });
 
     await adaptador.enviar([{ rol: "usuario", contenido: "hola" }], [HERRAMIENTA], {
       sinLlamadas: true,
@@ -277,7 +310,7 @@ describe("AdaptadorGemini", () => {
   });
 
   it("sin clave devuelve LLM_CLAVE_INVALIDA sin llamar al proveedor", async () => {
-    const adaptador = new AdaptadorGemini({ apiKey: "", modelo: "m", timeoutMs: 1 });
+    const adaptador = new AdaptadorGemini({ ...OPCIONES, apiKey: "" });
 
     const r = await adaptador.enviar([{ rol: "usuario", contenido: "hola" }], []);
 
@@ -287,7 +320,7 @@ describe("AdaptadorGemini", () => {
   it("nunca lanza: un error del SDK vuelve como código LLM_*", async () => {
     const generar: GenerarContenido = () =>
       Promise.reject(new ApiError({ status: 429, message: "x" }));
-    const adaptador = new AdaptadorGemini({ apiKey: "k", modelo: "m", timeoutMs: 1, generar });
+    const adaptador = new AdaptadorGemini({ ...OPCIONES, generar });
 
     const r = await adaptador.enviar([{ rol: "usuario", contenido: "hola" }], []);
 
