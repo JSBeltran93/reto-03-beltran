@@ -46,6 +46,7 @@ export const TEXTOS_ENCABEZADO = {
   conectando: "Conectando…",
   sinServidor: "Servidor no disponible",
   estadoServidor: "Estado del servidor: ",
+  claveInvalida: "Clave del modelo inválida",
 } as const;
 
 /** Textos del estado vacío. */
@@ -65,6 +66,7 @@ export const TEXTOS_ESTADO_VACIO = {
 /** Textos de la tarjeta de confirmación. */
 export const TEXTOS_CONFIRMACION = {
   titulo: "Se necesita tu confirmación antes de crear la OC",
+  tituloCaso: (caso: string): string => `Confirma la OC de ${caso}`,
   ayuda: "Revisa los puntos que requieren confirmación y decide.",
   confirmar: "Confirmar y crear OC",
   cancelar: "Cancelar",
@@ -77,6 +79,7 @@ export const TEXTOS_HERRAMIENTA = {
   conError: "Llamada con error: ",
   resumen: "Resultado",
   argumentos: "Argumentos",
+  datos: "Datos completos",
   detalles: "Ver detalles",
   pasos: "Pasos del agente",
 } as const;
@@ -94,6 +97,7 @@ export const TEXTOS_VALIDACION = {
     derivado: "Valor derivado",
   },
   accion: "Acción sugerida: ",
+  valores: "Valores",
 } as const;
 
 /** Textos de la orden de compra propuesta y creada. */
@@ -108,7 +112,10 @@ export const TEXTOS_ORDEN = {
     iva: "Indicador IVA",
     condiciones: "Condiciones de pago",
     aprobador: "Aprobador",
+    total: "Total",
+    excepciones: "Excepciones",
   },
+  sinExcepciones: "Ninguna",
   creada: (numero: string): string => `OC ${numero} creada en SAP`,
   existente: (numero: string): string => `La OC ${numero} ya existía (idempotencia)`,
   evidencia: "Evidencia de aprobación: ",
@@ -119,6 +126,8 @@ export const TEXTOS_ORDEN = {
 export const TEXTOS_ESTADO = {
   pensando: "El agente está trabajando…",
   reintentar: "Reintentar",
+  errorEnHistorial: "La última respuesta del agente fue un error.",
+  esperaReintento: (segundos: number): string => `Podrás reintentar en ${segundos} s`,
   conversacion: "Conversación",
   agente: "Agente",
   usuario: "Tú",

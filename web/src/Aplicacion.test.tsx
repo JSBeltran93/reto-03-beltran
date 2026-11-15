@@ -4,9 +4,11 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { enviarMensaje, obtenerSesion } from "./api/chat";
-import { ErrorApi, MENSAJES_ERROR_API } from "./api/cliente";
+import { ErrorApi, ESTADOS_HTTP, MENSAJES_ERROR_API } from "./api/cliente";
 import { obtenerSalud } from "./api/salud";
 import Aplicacion from "./Aplicacion";
+import { TEXTOS_ENCABEZADO, TEXTOS_ESTADO } from "./componentes/textos";
+import { MENSAJE_CLAVE_INVALIDA } from "./estado/conversacion";
 import { renderizarConConsultas } from "./pruebas/utilidades";
 
 vi.mock("./api/chat", () => ({ enviarMensaje: vi.fn(), obtenerSesion: vi.fn() }));
@@ -24,9 +26,15 @@ const respuestaSol004: RespuestaChat = {
     },
   ],
   needsConfirmation: true,
+  casoPendiente: "sol-004",
 };
 const sinConexion = (): ErrorApi =>
   new ErrorApi(MENSAJES_ERROR_API.sinConexion, { reintentable: true, sinRespuesta: true });
+const errorServidor = (): ErrorApi =>
+  new ErrorApi(MENSAJES_ERROR_API.respuestaServidor(ESTADOS_HTTP.errorServidor), {
+    estado: ESTADOS_HTTP.errorServidor,
+    reintentable: true,
+  });
 
 const escribir = async (texto: string): Promise<void> => {
   await userEvent.type(screen.getByLabelText("Mensaje para el agente"), `${texto}{Enter}`);
@@ -56,6 +64,7 @@ describe("Aplicacion", () => {
 
     expect(await screen.findByRole("group", { name: "Llamada a oc_validar" })).toBeInTheDocument();
     expect(screen.getByText(PREGUNTA)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Confirma la OC de sol-004/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Confirmar y crear OC" })).toBeInTheDocument();
   });
 
@@ -70,11 +79,29 @@ describe("Aplicacion", () => {
         },
         { tipo: "asistente", texto: PREGUNTA },
       ],
+      needsConfirmation: true,
+      casoPendiente: "sol-004",
     });
     renderizarConConsultas(<Aplicacion />);
 
     expect(await screen.findByText(PREGUNTA)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Confirmar y crear OC" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Confirma la OC de sol-004/ })).toBeInTheDocument();
+  });
+
+  it("no muestra la confirmación al rehidratar si el servidor dice que no hay", async () => {
+    vi.mocked(obtenerSesion).mockResolvedValue({
+      id: "x",
+      historial: [
+        { tipo: "usuario", texto: "Cancelar" },
+        { tipo: "asistente", texto: "Cancelado." },
+      ],
+      needsConfirmation: false,
+      casoPendiente: null,
+    });
+    renderizarConConsultas(<Aplicacion />);
+
+    expect(await screen.findByText("Cancelado.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Confirmar y crear OC" })).not.toBeInTheDocument();
   });
 
   it("muestra los errores del sistema como aviso con reintento", async () => {
@@ -88,13 +115,45 @@ describe("Aplicacion", () => {
 
     await escribir("hola");
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("El modelo no está disponible");
+    expect(await screen.findByRole("alert")).toHaveTextContent(TEXTOS_ESTADO.errorEnHistorial);
+    expect(screen.getByText("El modelo no está disponible en este momento.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reintentar" })).toBeInTheDocument();
+  });
+
+  it("mantiene la confirmación pendiente junto al aviso de error", async () => {
+    vi.mocked(enviarMensaje).mockResolvedValue({
+      reply: "El modelo no está disponible en este momento.",
+      toolCalls: [],
+      needsConfirmation: true,
+      casoPendiente: "sol-004",
+      esError: true,
+    });
+    renderizarConConsultas(<Aplicacion />);
+
+    await escribir("¿y el IVA?");
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirmar y crear OC" })).toBeInTheDocument();
+  });
+
+  it("avisa en el encabezado si la clave del modelo es inválida", async () => {
+    vi.mocked(enviarMensaje).mockResolvedValue({
+      reply: MENSAJE_CLAVE_INVALIDA,
+      toolCalls: [],
+      needsConfirmation: false,
+      esError: true,
+    });
+    renderizarConConsultas(<Aplicacion />);
+    await screen.findByText("claude-opus-5-5");
+
+    await escribir("hola");
+
+    expect(await screen.findByText(TEXTOS_ENCABEZADO.claveInvalida)).toBeInTheDocument();
   });
 
   it("reintenta el último mensaje con el botón Reintentar", async () => {
     vi.mocked(enviarMensaje)
-      .mockRejectedValueOnce(sinConexion())
+      .mockRejectedValueOnce(errorServidor())
       .mockResolvedValueOnce(respuestaSol004);
     renderizarConConsultas(<Aplicacion />);
 
@@ -115,6 +174,8 @@ describe("Aplicacion", () => {
           { tipo: "usuario", texto: "hola" },
           { tipo: "asistente", texto: "Hola, ¿qué solicitud procesamos?" },
         ],
+        needsConfirmation: false,
+        casoPendiente: null,
       });
     renderizarConConsultas(<Aplicacion />);
 
