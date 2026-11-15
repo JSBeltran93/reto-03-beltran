@@ -72,6 +72,8 @@ const RESUMIDORES: Readonly<Record<string, (d: Datos) => string>> = {
   [NOMBRES_HERRAMIENTAS.crear]: (d) =>
     `OC ${String(d.numero_oc)}${d.idempotente ? " (ya existía)" : ""}`,
   [NOMBRES_HERRAMIENTAS.leerPaquete]: (d) => faltantes(d.faltantes),
+  [NOMBRES_HERRAMIENTAS.leerExcel]: (d) =>
+    `hoja ${String(d.hoja)} · ${Array.isArray(d.filas) ? d.filas.length : 0} filas`,
 };
 
 function resumir(nombre: string, data: unknown): string {
