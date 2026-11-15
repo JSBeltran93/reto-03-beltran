@@ -1,107 +1,127 @@
 # Agente de Órdenes de Compra SAP — Reto 03 · Periferia IT Group
 
-Agente conversacional que lee el paquete de una solicitud de compra (correo, solicitud, cotización, aprobación y factura), lo valida contra los maestros y los controles **RC1–RC10**, muestra la orden de compra tal como quedaría en SAP, genera la evidencia de aprobación y crea la OC en un **SAP simulado** solo cuando corresponde, pidiendo confirmación humana en las excepciones.
+[![CI](https://github.com/JSBeltran93/reto-03-beltran/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/JSBeltran93/reto-03-beltran/actions/workflows/ci.yml)
 
-- **Link de prueba:** https://reto-03-beltran-production.up.railway.app — no requiere clave de acceso.
-- **Planteamiento de la solución:** [`SOLUCION.md`](SOLUCION.md)
-- **Guía de desarrollo:** [`CONTRIBUTING.md`](CONTRIBUTING.md) · **Decisiones:** [`documentacion/decisiones/`](documentacion/decisiones) · **Uso de IA:** [`documentacion/uso-ia.md`](documentacion/uso-ia.md)
+Agente conversacional que lee el paquete de una solicitud de compra, lo valida contra los maestros y los controles **RC1–RC10** y crea la orden de compra en un **SAP simulado** solo cuando corresponde, pidiendo confirmación humana en las excepciones.
 
-## Requisitos
-
-- Node.js 22 (ver `.nvmrc`) y npm.
-- Una clave de Anthropic **solo** para el chat. La demo y los tests no la necesitan.
+**Link público:** https://reto-03-beltran-production.up.railway.app — no requiere clave de acceso.
 
 ## Inicio rápido
+
+Requisitos: Node.js 22 (`.nvmrc`) y npm. La clave del modelo solo se necesita para el chat.
 
 ```bash
 npm install          # instala la raíz y el workspace web/; configura los hooks de git
 cp .env.example .env # completar ANTHROPIC_API_KEY para usar el chat
-npm run dev          # back (http://localhost:3000) + front (http://localhost:5173) con un solo comando
+npm run dev          # back (http://localhost:3000) + front (http://localhost:5173)
 ```
 
-### Variables de entorno (`.env.example`)
+### Variables de entorno
 
-| Variable            | Valor por defecto | Uso                                                                                                                 |
-| ------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `ANTHROPIC_API_KEY` | —                 | Clave del modelo (solo en el backend; nunca en el front, el repo ni los logs). En Railway se configura en Variables |
-| `LLM_MODELO`        | `claude-opus-5-5` | Modelo de Anthropic                                                                                                 |
-| `LLM_TIMEOUT_MS`    | `60000`           | Tiempo máximo por llamada al modelo                                                                                 |
-| `MAX_ITERACIONES`   | `25`              | Tope de iteraciones herramienta → modelo por turno (CA1)                                                            |
-| `MAX_TOKENS_SESION` | `200000`          | Tope de tokens por sesión                                                                                           |
-| `MAX_TOKENS_DIA`    | `3000000`         | Tope diario de tokens de todo el servidor                                                                           |
-| `MAX_SESIONES`      | `200`             | Sesiones en memoria (se descarta la más antigua)                                                                    |
-| `PORT`              | `3000`            | Puerto HTTP                                                                                                         |
+| Variable                 | Por defecto         | Uso                                                                        |
+| ------------------------ | ------------------- | -------------------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`      | —                   | Clave del modelo; solo en el backend (`.env` local o Variables de Railway) |
+| `LLM_MODELO`             | `claude-opus-5-5`   | Modelo principal                                                           |
+| `LLM_MODELO_RESPALDO`    | `claude-sonnet-5-5` | Modelo de respaldo si el principal falla                                   |
+| `LLM_TIMEOUT_MS`         | `60000`             | Tiempo máximo por llamada al modelo                                        |
+| `MAX_ITERACIONES`        | `25`                | Tope de iteraciones herramienta → modelo por turno (CA1)                   |
+| `MAX_SEGUNDOS_TURNO`     | ver `.env.example`  | Duración máxima de un turno                                                |
+| `MAX_SOLICITUDES_MINUTO` | ver `.env.example`  | Límite de mensajes por minuto e IP (responde 429)                          |
+| `MAX_TOKENS_SESION`      | `200000`            | Tope de tokens por sesión                                                  |
+| `MAX_TOKENS_DIA`         | `3000000`           | Tope diario de tokens del servidor                                         |
+| `MAX_SESIONES`           | `200`               | Sesiones en memoria (se desaloja la de uso menos reciente)                 |
+| `PORT`                   | `3000`              | Puerto HTTP (Railway lo asigna)                                            |
 
-## Demo sin modelo (`demo.ts`)
+`.env.example` es la referencia completa, incluidos los límites de solicitudes por IP.
+
+## Demo sin modelo
 
 ```bash
 npm install && npm run demo
 ```
 
-Procesa los 6 casos de `fixtures/reto-03/solicitudes/` llamando directamente a las herramientas, sin clave ni modelo. Resultado esperado:
+Procesa los 6 casos de `fixtures/reto-03/solicitudes/` llamando directamente a las herramientas, sin clave:
 
-| Caso    | Resultado                                                                                   |
-| ------- | ------------------------------------------------------------------------------------------- |
-| sol-001 | OC `4500000001`; la segunda ejecución devuelve el mismo número (idempotencia)               |
-| sol-002 | Bloqueada por RC1 (proveedor inexistente) con acción sugerida                               |
-| sol-003 | Bloqueada por RC2 y RC3 (aprobador sin autoridad); sugiere revisar CC-3030                  |
-| sol-004 | Pide confirmación RC5 (25.000.000 vs 26.500.000, 6 %); tras confirmar, OC `4500000002`      |
-| sol-005 | Pide confirmación RC8 (retroactiva); tras confirmar, OC `4500000003` con `retroactiva=true` |
-| sol-006 | Queda pendiente de confirmar el IVA derivado C1 (condiciones Z030 derivadas)                |
+| Caso    | Resultado                                                                         |
+| ------- | --------------------------------------------------------------------------------- |
+| sol-001 | OC `4500000001`; la segunda ejecución devuelve el mismo número (idempotencia)     |
+| sol-002 | Bloqueada por RC1 (proveedor inexistente) con acción sugerida                     |
+| sol-003 | Bloqueada por RC2 y RC3 (aprobador sin autoridad); sugiere revisar CC-3030        |
+| sol-004 | Confirmación RC5 (25.000.000 vs 26.500.000, 6 %); tras confirmar, OC `4500000002` |
+| sol-005 | Confirmación RC8 (retroactiva); tras confirmar, OC `4500000003`                   |
+| sol-006 | Pendiente de confirmar el IVA derivado C1 (condiciones Z030 derivadas)            |
 
-Archivos generados en `out/`: `control.csv`, `sap/ordenes.jsonl`, `log.jsonl` (chat), `<caso>/trazabilidad.json`, `<caso>/aprobacion.txt` y `aprobacion.pdf`.
+Genera en `out/`: `control.csv`, `sap/ordenes.jsonl`, `<caso>/trazabilidad.json`, `<caso>/aprobacion.txt` y `aprobacion.pdf`.
 
-## Calidad y pruebas
+## Calidad
 
-| Comando                       | Qué hace                                                                                                                                |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`                    | Tests del back (Vitest + supertest, LLM falso) y del front (Testing Library)                                                            |
-| `npm run typecheck`           | TypeScript estricto en back y front                                                                                                     |
-| `npm run lint`                | ESLint con tipos, React Hooks y accesibilidad                                                                                           |
-| `npm run format`              | Prettier                                                                                                                                |
-| `npm run check`               | Formato, lint, tipos y tests en orden                                                                                                   |
-| `npm run build` / `npm start` | Compila el front y arranca el servidor de producción (lee las variables del entorno; en local: `npx tsx --env-file=.env src/server.ts`) |
+| Comando                       | Qué hace                                                                    |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| `npm test`                    | Tests del back (Vitest, supertest, LLM falso) y del front (Testing Library) |
+| `npm run typecheck`           | TypeScript estricto en back y front                                         |
+| `npm run lint`                | ESLint con tipos, React Hooks y accesibilidad                               |
+| `npm run check`               | Formato, lint, tipos y tests en orden                                       |
+| `npm run build` / `npm start` | Compila el front y arranca el servidor de producción (lee `.env` si existe) |
 
-Los hooks de git ejecutan lint y formato al commitear, validan el mensaje de commit y corren tipos y tests antes de cada push. El CI de GitHub Actions repite todo, más la demo, el build y `npm audit`.
+Hooks de git: lint y formato al commitear, mensaje validado con commitlint, tipos y tests antes del push. El CI repite todo, más la demo, el build y `npm audit`.
 
 ## API
 
-| Método | Ruta                | Cuerpo                                                                 | Respuesta                                                                                                                                                                      |
-| ------ | ------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `POST` | `/api/chat`         | `{ "sessionId": "<uuid>", "message": "Procesa la solicitud sol-004" }` | `{ "reply": "…", "toolCalls": [{ "nombre": "oc_validar", "args": {…}, "ok": true, "resumen": "apta · bloqueos: ninguna · confirmaciones: RC5" }], "needsConfirmation": true }` |
-| `GET`  | `/api/sessions/:id` | —                                                                      | `{ "id": "<uuid>", "historial": [{ "tipo": "usuario", "texto": "…" }, { "tipo": "herramienta", "llamada": {…} }, …] }` (404 si no existe)                                      |
-| `GET`  | `/api/health`       | —                                                                      | `{ "ok": true, "provider": "anthropic", "model": "claude-opus-5-5" }` (sin claves)                                                                                             |
+| Método | Ruta                | Cuerpo                                      | Respuesta                                                                                               |
+| ------ | ------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `POST` | `/api/chat`         | `{ "sessionId": "<uuid>", "message": "…" }` | `{ "reply", "toolCalls": [{ "nombre", "args", "ok", "resumen", … }], "needsConfirmation", "esError"? }` |
+| `GET`  | `/api/sessions/:id` | —                                           | `{ "id", "historial": [...] }`; 404 si no existe                                                        |
+| `GET`  | `/api/health`       | —                                           | `{ "ok": true, "provider", "model" }` (sin claves)                                                      |
 
-Las rutas viven en `RUTAS_API` (`src/comun/contratos-api.ts`), compartidas por back y front. El `sessionId` es un UUID generado por el navegador. Un cuerpo inválido o JSON mal formado en `/api/chat` responde `400`, un cuerpo de más de 32 kb responde `413` y una ruta `/api/*` inexistente responde `404`. Los errores del modelo o de una herramienta se devuelven como mensaje claro en `reply` con `esError: true` y la sesión sigue activa. Los turnos de una misma sesión se procesan en orden (candado por sesión).
+Ejemplo de `resumen`: `"apta · bloqueos: ninguna · confirmaciones: RC5"`. Las rutas viven en `RUTAS_API` (`src/comun/rutas-api.ts`), compartidas por back y front. Cuerpo inválido o JSON roto → `400`; cuerpo de más de 32 kb → `413`; ruta `/api/*` inexistente → `404`. Los errores del modelo o de una herramienta llegan como `reply` con `esError: true` y la sesión sigue activa.
+
+## Arquitectura
+
+```mermaid
+flowchart LR
+  Web["web/ — chat React"] -->|HTTP JSON| Server["src/server.ts — API"]
+  Server --> Agente["src/agente/ — ciclo y confirmación"]
+  Agente --> LLM["src/llm/ — modelo principal + respaldo"]
+  Agente --> Tools["src/tools/oc.ts — 5 herramientas"]
+  Tools --> Dominio["src/tools/oc/ — reglas RC1–RC10, payload, evidencia"]
+  Dominio --> SAP["src/sap/ — SAP simulado"]
+```
 
 ## Estructura
 
 ```
-agent/prompt.md                  comportamiento del agente (system prompt)
+agent/prompt.md                   comportamiento del agente (system prompt)
 src/
-├── server.ts                    API HTTP (crearAplicacion) y raíz de composición
-├── configuracion.ts             variables de entorno validadas con zod
-├── agente/                      ciclo del agente, compuerta de confirmación, sesiones, bitácora
-├── llm/adapter.ts · anthropic.ts  puerto AdaptadorLlm y su implementación
-├── tools/oc.ts                  las 5 herramientas oc_* del PRD
-├── tools/oc/                    dominio: esquemas, extractores, reglas RC1–RC10, payload, evidencia…
-├── sap/adapter.ts · mock.ts     puerto SapAdapter y SAP simulado
-├── comun/                       resultado, errores, reloj, registrador, huella, contratos de la API, rutas
-└── knowledge/ordenes-compra.md  conocimiento del proceso
-web/                             chat en React 19 + Vite + Tailwind + TanStack Query + axios
-pruebas/                         tests del back (el front tiene sus tests junto a cada componente)
-documentacion/                   PRD, plan, decisiones (ADR) y bitácora de uso de IA
-fixtures/reto-03/                insumos del reto (solo lectura)
-modulo/                          bonus: agente empaquetado para otras plataformas
-demo.ts                          verificación sin modelo
+├── server.ts                     API HTTP (crearAplicacion) y raíz de composición
+├── configuracion.ts              variables de entorno validadas con zod
+├── agente/                       ciclo, compuerta de confirmación, sesiones, bitácora
+├── llm/                          puerto AdaptadorLlm, Anthropic y respaldo
+├── tools/oc.ts · tools/oc/       las 5 herramientas oc_* y el dominio
+├── sap/                          puerto SapAdapter y SAP simulado
+├── comun/                        resultado, errores, reloj, registrador, contratos y rutas
+└── knowledge/ordenes-compra.md   conocimiento del proceso
+web/                              chat: React 19, Vite, Tailwind, TanStack Query, axios
+pruebas/                          tests del back (los del front van junto a cada componente)
+documentacion/decisiones/         decisiones de arquitectura (ADR)
+fixtures/reto-03/                 insumos del reto (solo lectura)
+modulo/                           bonus: agente empaquetado para otras plataformas
+demo.ts                           verificación sin modelo
 ```
+
+## Documentación
+
+- [`SOLUCION.md`](SOLUCION.md): planteamiento de la solución (12 secciones del PRD), incluido el uso de IA.
+- [`documentacion/decisiones/`](documentacion/decisiones): ADR 0001–0007.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): guía de desarrollo, ramas, commits y estándares.
+
+## Despliegue
+
+Railway con configuración como código (`railway.json`): build `npm ci --include=dev && npm run build`, arranque `npm start`, health check en `/api/health`. Un push a `develop` despliega; alternativa equivalente: `railway up`. La clave se configura solo en Variables de Railway. El disco es efímero: `out/` se pierde al redesplegar ([ADR-0007](documentacion/decisiones/0007-despliegue-en-railway.md)).
 
 ## Bonus: módulo reutilizable (`modulo/`)
 
-- `modulo/agent.md`: frontmatter (`description`, `mode: primary`, `permission: {edit: deny, bash: deny}`) y, como cuerpo, el contenido de `agent/prompt.md`.
-- `modulo/tools/oc.ts`: re-exporta `src/tools/oc.ts`; son las mismas herramientas, no una copia.
-- `modulo/skill/ordenes-compra/SKILL.md`: frontmatter (`name`, `description`) y, como cuerpo, el contenido de `src/knowledge/ordenes-compra.md`.
+- `modulo/agent.md`: frontmatter (`description`, `mode: primary`, `permission: {edit: deny, bash: deny}`) y el contenido de `agent/prompt.md`.
+- `modulo/tools/oc.ts`: re-exporta `src/tools/oc.ts` (las mismas herramientas, no una copia).
+- `modulo/skill/ordenes-compra/SKILL.md`: frontmatter (`name`, `description`) y el contenido de `src/knowledge/ordenes-compra.md`.
 
-Los cuerpos de los `.md` son copias exactas de sus fuentes; si se edita el prompt o el conocimiento, se actualiza también la copia del módulo para que no diverjan.
-
-> **Nota de despliegue:** en Railway el disco es efímero; `out/` (órdenes del SAP simulado, `control.csv`, bitácora) se pierde al redesplegar, por lo que la numeración y la idempotencia se reinician. En producción se usaría un volumen o una base de datos.
+`pruebas/modulo.test.ts` falla si alguna copia diverge de su fuente.
