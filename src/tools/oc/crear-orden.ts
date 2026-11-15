@@ -9,7 +9,7 @@ import { ARCHIVOS_SALIDA, rutaSalida, rutaSalidaRelativa } from "../../comun/rut
 import type { OrdenRegistrada, SapAdapter } from "../../sap/adapter";
 import { type CasoEvaluado, evaluarCaso } from "./caso";
 import type { OrdenCompra } from "./esquemas";
-import { generarEvidencia, hashEvidenciaCaso } from "./evidencia";
+import { generarEvidencia, huellaEvidenciaCaso } from "./evidencia";
 import { NOMBRES_HERRAMIENTAS } from "./nombres";
 import { construirOrden } from "./payload";
 import { registrarControl, type ResultadoControl, RESULTADOS_CONTROL } from "./registro-control";
@@ -38,6 +38,8 @@ export interface PedidoCreacion {
 }
 
 const EsquemaOrdenExistente = z.object({ numero_oc: z.string(), fecha: z.string().optional() });
+/** El SAP simulado indica si la orden ya existía (creación concurrente de la misma solicitud). */
+const EsquemaOrdenGuardada = z.object({ existente: z.boolean().optional() });
 
 interface Base {
   solicitudId: string;
@@ -45,19 +47,19 @@ interface Base {
 }
 
 function registrar(
-  deps: DependenciasCrear,
+  dependencias: DependenciasCrear,
   base: Base,
   resultado: ResultadoControl,
   numeroOc: string | null,
 ): void {
-  registrarControl(deps.raiz, {
+  registrarControl(dependencias.raiz, {
     solicitud_id: base.solicitudId,
     resultado,
     numero_oc: numeroOc,
     retroactiva: base.validacion.retroactiva,
     bloqueos: base.validacion.bloqueos.map((h) => h.regla),
     confirmaciones: base.validacion.confirmaciones.map((h) => h.regla),
-    ts: deps.reloj.ahora().toISOString(),
+    ts: dependencias.reloj.ahora().toISOString(),
   });
 }
 
@@ -82,9 +84,9 @@ function reconstruirOrden(
   caso: string,
   evaluado: CasoEvaluado,
 ): Resultado<OrdenCompra> {
-  const hash = hashEvidenciaCaso(raiz, caso);
-  if (!hash.ok) return hash;
-  const orden = construirOrden(evaluado.paquete, evaluado.validacion, hash.data);
+  const huellaEvidencia = huellaEvidenciaCaso(raiz, caso);
+  if (!huellaEvidencia.ok) return huellaEvidencia;
+  const orden = construirOrden(evaluado.paquete, evaluado.validacion, huellaEvidencia.data);
   return orden.ok ? exito(orden.data.orden) : orden;
 }
 
@@ -96,14 +98,14 @@ function conExcepcionesConfirmadas(orden: OrdenCompra, confirmadoPor: string): O
 }
 
 function respuestaIdempotente(
-  deps: DependenciasCrear,
+  dependencias: DependenciasCrear,
   base: Base,
   existente: Pick<OrdenRegistrada, "numero_oc">,
   rutaEvidencia: string,
 ): Resultado<OrdenCreada> {
-  registrar(deps, base, RESULTADOS_CONTROL.idempotente, existente.numero_oc);
+  registrar(dependencias, base, RESULTADOS_CONTROL.idempotente, existente.numero_oc);
   const { fecha } = EsquemaOrdenExistente.parse(existente);
-  const fechaOriginal = fecha ?? deps.reloj.ahora().toISOString();
+  const fechaOriginal = fecha ?? dependencias.reloj.ahora().toISOString();
   return exito({
     numero_oc: existente.numero_oc,
     fecha: fechaOriginal,
@@ -124,41 +126,68 @@ async function asegurarEvidencia(raiz: string, caso: string): Promise<Resultado<
  * Verifica en orden: idempotencia → reglas de bloqueo → confirmación del usuario →
  * integridad del payload (debe ser igual a la orden reconstruida desde los documentos).
  * Cada intento queda en out/control.csv.
- * @param deps - raíz del proyecto, adaptador SAP, reloj y usuario que confirma
+ * @param dependencias - raíz del proyecto, adaptador SAP, reloj y usuario que confirma
  * @param pedido - caso, payload y bandera de confirmación
  * @returns número de OC, fecha e idempotencia, o un error de dominio
  */
 export async function crearOrdenCaso(
-  deps: DependenciasCrear,
+  dependencias: DependenciasCrear,
   pedido: PedidoCreacion,
 ): Promise<Resultado<OrdenCreada>> {
-  const evaluado = evaluarCaso(deps.raiz, pedido.caso);
+  const evaluado = evaluarCaso(dependencias.raiz, pedido.caso);
   if (!evaluado.ok) return evaluado;
   const { paquete, validacion } = evaluado.data;
   const base: Base = { solicitudId: paquete.solicitud.solicitud_id, validacion };
   const ruta_evidencia = rutaSalidaRelativa(pedido.caso, ARCHIVOS_SALIDA.evidenciaTexto);
-  const existente = await deps.sap.buscarOrdenPorReferencia(base.solicitudId);
-  if (existente) return respuestaIdempotente(deps, base, existente, ruta_evidencia);
+  const existente = await dependencias.sap.buscarOrdenPorReferencia(base.solicitudId);
+  if (existente) return respuestaIdempotente(dependencias, base, existente, ruta_evidencia);
   const permiso = verificarPermiso(validacion, pedido.confirmado);
   if (!permiso.ok) {
     const resultado = validacion.apta ? RESULTADOS_CONTROL.pendiente : RESULTADOS_CONTROL.bloqueada;
-    registrar(deps, base, resultado, null);
+    registrar(dependencias, base, resultado, null);
     return permiso;
   }
-  const esperada = reconstruirOrden(deps.raiz, pedido.caso, evaluado.data);
+  const esperada = reconstruirOrden(dependencias.raiz, pedido.caso, evaluado.data);
   if (!esperada.ok) return esperada;
   if (huella(pedido.payload) !== huella(esperada.data)) {
+    registrar(dependencias, base, RESULTADOS_CONTROL.bloqueada, null);
     return fallo(
       "PAYLOAD_ALTERADO",
       "El payload no coincide con el validado.",
       `Vuelva a ejecutar ${NOMBRES_HERRAMIENTAS.construirPayload} y envíe su resultado sin cambios.`,
     );
   }
-  const evidencia = await asegurarEvidencia(deps.raiz, pedido.caso);
-  if (!evidencia.ok) return evidencia;
-  const creada = await deps.sap.crearOrden(
-    conExcepcionesConfirmadas(esperada.data, deps.confirmadoPor),
+  return guardarEnSap(
+    dependencias,
+    base,
+    conExcepcionesConfirmadas(esperada.data, dependencias.confirmadoPor),
+    {
+      caso: pedido.caso,
+      rutaEvidencia: ruta_evidencia,
+    },
   );
-  registrar(deps, base, RESULTADOS_CONTROL.creada, creada.numero_oc);
-  return exito({ ...creada, idempotente: false, ruta_evidencia });
+}
+
+/**
+ * Asegura la evidencia, crea la orden en SAP y registra el resultado; si otra creación
+ * concurrente ya la había guardado, responde como idempotente.
+ */
+async function guardarEnSap(
+  dependencias: DependenciasCrear,
+  base: Base,
+  orden: OrdenCompra,
+  destino: { caso: string; rutaEvidencia: string },
+): Promise<Resultado<OrdenCreada>> {
+  const evidencia = await asegurarEvidencia(dependencias.raiz, destino.caso);
+  if (!evidencia.ok) return evidencia;
+  const creada = await dependencias.sap.crearOrden(orden);
+  const { existente = false } = EsquemaOrdenGuardada.parse(creada);
+  const resultado = existente ? RESULTADOS_CONTROL.idempotente : RESULTADOS_CONTROL.creada;
+  registrar(dependencias, base, resultado, creada.numero_oc);
+  return exito({
+    numero_oc: creada.numero_oc,
+    fecha: creada.fecha,
+    idempotente: existente,
+    ruta_evidencia: destino.rutaEvidencia,
+  });
 }

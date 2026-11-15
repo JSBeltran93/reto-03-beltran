@@ -1,5 +1,11 @@
 import { exito, fallo, type Resultado } from "../../comun/resultado";
 
+/** Acción sugerida cuando un documento no se puede interpretar (HU-6). */
+const ACCION_REENVIO = {
+  cotizacion: "Pida al solicitante reenviar la cotización del proveedor legible.",
+  factura: "Pida al solicitante reenviar la factura legible.",
+} as const;
+
 /** Monto con su moneda, extraído de un texto. */
 export interface Monto {
   readonly moneda: string;
@@ -90,7 +96,11 @@ export function extraerCotizacion(texto: string): Resultado<CotizacionExtraida> 
   const textoTotal = campo(texto, /^TOTAL[^:\n]*:\s*(.+)$/m);
   const proveedor = campo(texto, /^Proveedor:\s*(.+)$/m);
   if (textoTotal === null || proveedor === null) {
-    return fallo("MONTO_INVALIDO", "La cotización no tiene proveedor o total identificables.");
+    return fallo(
+      "MONTO_INVALIDO",
+      "La cotización no tiene proveedor o total identificables.",
+      ACCION_REENVIO.cotizacion,
+    );
   }
   const monto = extraerMonto(textoTotal);
   if (!monto.ok) return monto;
@@ -118,7 +128,11 @@ export function extraerFactura(texto: string): Resultado<FacturaExtraida> {
   const fecha = campo(texto, /Fecha de emisi[óo]n:\s*(\d{4}-\d{2}-\d{2})/);
   const textoTotal = campo(texto, /^TOTAL:\s*(.+)$/m);
   if (numero === null || fecha === null || textoTotal === null) {
-    return fallo("MONTO_INVALIDO", "La factura no tiene número, fecha o total identificables.");
+    return fallo(
+      "MONTO_INVALIDO",
+      "La factura no tiene número, fecha o total identificables.",
+      ACCION_REENVIO.factura,
+    );
   }
   const monto = extraerMonto(textoTotal);
   return monto.ok ? exito({ numero, fecha, total: monto.data.valor }) : monto;

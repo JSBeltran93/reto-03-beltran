@@ -1,6 +1,6 @@
 import { exito, type Resultado } from "../../comun/resultado";
 import type { Maestros, Paquete } from "./esquemas";
-import { leerMaestros } from "./fixtures";
+import { leerMaestros } from "./insumos";
 import { leerPaquete } from "./paquete";
 import { type Validacion, validarPaquete } from "./validacion";
 

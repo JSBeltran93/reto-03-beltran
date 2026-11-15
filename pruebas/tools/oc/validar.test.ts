@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -67,14 +67,18 @@ describe("oc_validar", () => {
     expect(data.aviso).toContain("difiere");
   });
 
-  it("registra como pendiente la validación apta que espera confirmación (HU-5)", async () => {
+  it("solo registra en control.csv las validaciones bloqueadas; la apta no escribe (HU-5)", async () => {
     const raiz = crearProyectoTemporal();
     await ejecutarValidacion(raiz, "sol-004");
+    expect(existsSync(path.join(raiz, "out", "control.csv"))).toBe(false);
 
+    await ejecutarValidacion(raiz, "sol-002");
+    await ejecutarValidacion(raiz, "sol-002");
     const lineas = readFileSync(path.join(raiz, "out", "control.csv"), "utf8")
       .trim()
       .split("\n");
 
-    expect(lineas[1]).toMatch(/^SOL-2026-004,pendiente,,false,,RC5,\d{4}-/);
+    expect(lineas).toHaveLength(2);
+    expect(lineas[1]).toMatch(/^SOL-2026-002,bloqueada,,false,RC1,,\d{4}-/);
   });
 });

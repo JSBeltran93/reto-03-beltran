@@ -5,7 +5,7 @@ import { sha256 } from "../../comun/huella";
 import { exito, fallo, type Resultado } from "../../comun/resultado";
 import { ARCHIVOS_CASO, ARCHIVOS_SALIDA, rutaSalida, rutaSalidaRelativa } from "../../comun/rutas";
 import { type AprobacionArchivo, EsquemaAprobacionArchivo } from "./esquemas";
-import { leerJson, resolverCaso } from "./fixtures";
+import { leerJson, resolverCaso } from "./insumos";
 import { escribirPdf } from "./pdf";
 
 /** Salida de `oc_generar_evidencia`: `ruta` y `sha256` del PRD más la ruta del PDF. */
@@ -60,7 +60,7 @@ export function leerAprobacionCaso(raiz: string, caso: string): Resultado<Aproba
  * @param caso - nombre de la carpeta del caso
  * @returns digest hexadecimal o un error de dominio
  */
-export function hashEvidenciaCaso(raiz: string, caso: string): Resultado<string> {
+export function huellaEvidenciaCaso(raiz: string, caso: string): Resultado<string> {
   const aprobacion = leerAprobacionCaso(raiz, caso);
   return aprobacion.ok ? exito(sha256(textoEvidencia(aprobacion.data))) : aprobacion;
 }
@@ -75,15 +75,15 @@ export async function generarEvidencia(raiz: string, caso: string): Promise<Resu
   const aprobacion = leerAprobacionCaso(raiz, caso);
   if (!aprobacion.ok) return aprobacion;
   const contenido = textoEvidencia(aprobacion.data);
-  const hash = sha256(contenido);
-  const conHash = `${contenido}\n\n---\nsha256: ${hash}\n`;
+  const huella = sha256(contenido);
+  const conHuella = `${contenido}\n\n---\nsha256: ${huella}\n`;
   const carpeta = rutaSalida(raiz, caso);
   mkdirSync(carpeta, { recursive: true });
-  writeFileSync(path.join(carpeta, ARCHIVOS_SALIDA.evidenciaTexto), conHash);
-  await escribirPdf(path.join(carpeta, ARCHIVOS_SALIDA.evidenciaPdf), conHash);
+  writeFileSync(path.join(carpeta, ARCHIVOS_SALIDA.evidenciaTexto), conHuella);
+  await escribirPdf(path.join(carpeta, ARCHIVOS_SALIDA.evidenciaPdf), conHuella);
   return exito({
     ruta: rutaSalidaRelativa(caso, ARCHIVOS_SALIDA.evidenciaTexto),
-    sha256: hash,
+    sha256: huella,
     ruta_pdf: rutaSalidaRelativa(caso, ARCHIVOS_SALIDA.evidenciaPdf),
   });
 }
