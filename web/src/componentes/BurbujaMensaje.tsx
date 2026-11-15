@@ -16,6 +16,9 @@ export interface PropiedadesBurbujaMensaje {
 
 const CLASE_TITULO = "mt-3 mb-1 text-sm font-semibold first:mt-0";
 
+/** Elementos que el Markdown del agente no puede producir (se conserva su contenido). */
+const ELEMENTOS_BLOQUEADOS = ["img"];
+
 const componentesMarkdown: Components = {
   table: ({ children }) => (
     <div className="my-3 overflow-x-auto rounded-xl border border-borde">
@@ -32,6 +35,16 @@ const componentesMarkdown: Components = {
   h3: ({ children }) => <p className={CLASE_TITULO}>{children}</p>,
   pre: ({ children }) => (
     <pre className="my-2 overflow-x-auto rounded-xl bg-elevada p-3 text-xs">{children}</pre>
+  ),
+  a: ({ children, href }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="anillo-foco rounded text-info underline underline-offset-2"
+    >
+      {children}
+    </a>
   ),
   code: ({ children }) => (
     <code className="rounded bg-elevada px-1 font-mono text-xs break-all">{children}</code>
@@ -67,7 +80,12 @@ export function BurbujaMensaje({ autor, texto }: PropiedadesBurbujaMensaje) {
         </span>
         {TEXTOS_ESTADO.agente}
       </p>
-      <Markdown remarkPlugins={[remarkGfm]} components={componentesMarkdown}>
+      <Markdown
+        remarkPlugins={[remarkGfm]}
+        components={componentesMarkdown}
+        disallowedElements={ELEMENTOS_BLOQUEADOS}
+        unwrapDisallowed
+      >
         {texto}
       </Markdown>
     </article>

@@ -2,13 +2,20 @@ import type { EntradaHistorial } from "@contratos/contratos-api";
 import { describe, expect, it } from "vitest";
 
 import { agruparEnBloques } from "./bloques";
-import { confirmacionesPendientes, resultadoRico } from "./resultados";
+import { casoDeLlamada, confirmacionesPendientes, resultadoRico } from "./resultados";
 
 const hallazgo = { regla: "RC6", tipo: "confirmacion", detalle: "IVA derivado C1" };
-const validar = (datos: unknown): EntradaHistorial => ({
+const validar = (datos: unknown, caso = "sol-004", ok = true): EntradaHistorial => ({
   tipo: "herramienta",
-  llamada: { nombre: "oc_validar", args: {}, ok: true, resumen: "apta", datos },
+  llamada: { nombre: "oc_validar", args: { caso }, ok, resumen: "apta", datos },
 });
+const conConfirmaciones = (confirmaciones: unknown[]) => ({
+  apta: true,
+  bloqueos: [],
+  confirmaciones,
+  retroactiva: false,
+});
+const otroHallazgo = { regla: "RC5", tipo: "confirmacion", detalle: "Diferencia de 6 %" };
 
 describe("resultadoRico", () => {
   it.each([
@@ -44,18 +51,34 @@ describe("resultadoRico", () => {
 });
 
 describe("confirmacionesPendientes", () => {
-  it("toma las confirmaciones de la última validación del historial", () => {
-    const historial = [
-      validar({ apta: true, bloqueos: [], confirmaciones: [], retroactiva: false }),
-      { tipo: "asistente", texto: "…" } as const,
-      validar({ apta: true, bloqueos: [], confirmaciones: [hallazgo], retroactiva: false }),
-    ];
+  const historial = [
+    validar(conConfirmaciones([hallazgo]), "sol-004"),
+    { tipo: "asistente", texto: "…" } as const,
+    validar(conConfirmaciones([otroHallazgo]), "sol-005"),
+    validar(conConfirmaciones([]), "sol-004", false),
+  ];
 
-    expect(confirmacionesPendientes(historial)).toEqual([hallazgo]);
+  it.each<[string, string | null, unknown[]]>([
+    ["la última validación correcta del caso pendiente", "sol-004", [hallazgo]],
+    ["la última validación correcta de otro caso", "sol-005", [otroHallazgo]],
+    ["sin caso: la última validación correcta", null, [otroHallazgo]],
+    ["un caso sin validaciones", "sol-001", []],
+  ])("toma %s", (_nombre, caso, esperado) => {
+    expect(confirmacionesPendientes(historial, caso)).toEqual(esperado);
   });
 
   it("devuelve vacío si no hay validaciones", () => {
-    expect(confirmacionesPendientes([{ tipo: "usuario", texto: "hola" }])).toEqual([]);
+    expect(confirmacionesPendientes([{ tipo: "usuario", texto: "hola" }], null)).toEqual([]);
+  });
+});
+
+describe("casoDeLlamada", () => {
+  it.each([
+    [{ caso: "sol-004" }, "sol-004"],
+    [{}, null],
+    [null, null],
+  ])("%j → %s", (args, esperado) => {
+    expect(casoDeLlamada({ nombre: "oc_validar", args, ok: true, resumen: "" })).toBe(esperado);
   });
 });
 

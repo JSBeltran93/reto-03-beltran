@@ -46,15 +46,12 @@ function renderizarBloque(bloque: Bloque) {
  */
 export function ListaMensajes({ entradas }: PropiedadesListaMensajes) {
   return (
-    <ol
-      role="log"
-      aria-live="polite"
-      aria-label={TEXTOS_ESTADO.conversacion}
-      className="flex flex-col gap-4"
-    >
-      {agruparEnBloques(entradas).map((bloque, indice) => (
-        <li key={indice}>{renderizarBloque(bloque)}</li>
-      ))}
-    </ol>
+    <div role="log" aria-live="polite" aria-label={TEXTOS_ESTADO.conversacion}>
+      <ol className="flex flex-col gap-4">
+        {agruparEnBloques(entradas).map((bloque, indice) => (
+          <li key={indice}>{renderizarBloque(bloque)}</li>
+        ))}
+      </ol>
+    </div>
   );
 }

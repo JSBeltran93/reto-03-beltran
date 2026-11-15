@@ -1,8 +1,12 @@
-import type { DatosCreacion, DatosPayload } from "../estado/resultados";
+import { type DatosCreacion, type DatosPayload, totalOrden } from "../estado/resultados";
 import { CLASES, TONOS } from "./clases";
+import { formatearFecha, formatearNumero } from "./formato";
 import { TEXTOS_ORDEN } from "./textos";
 
-const formatoNumero = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 2 });
+function textoExcepciones(datos: DatosPayload): string {
+  const codigos = datos.orden.excepciones.map((e) => e.codigo);
+  return codigos.length > 0 ? codigos.join(", ") : TEXTOS_ORDEN.sinExcepciones;
+}
 
 /**
  * Filas de la tabla de la OC propuesta, en el orden en que la analista las revisa.
@@ -21,11 +25,13 @@ function filasOrden(datos: DatosPayload): readonly (readonly [string, string])[]
     ],
     [campos.centro, `${posicion.centro_costo} / ${posicion.subarea}`],
     [campos.descripcion, posicion.descripcion],
-    [campos.cantidad, `${formatoNumero.format(posicion.cantidad)} ${posicion.unidad}`],
-    [campos.precio, `${orden.moneda} ${formatoNumero.format(posicion.precio_unitario)}`],
+    [campos.cantidad, `${formatearNumero(posicion.cantidad)} ${posicion.unidad}`],
+    [campos.precio, `${orden.moneda} ${formatearNumero(posicion.precio_unitario)}`],
     [campos.iva, posicion.indicador_iva],
     [campos.condiciones, orden.condiciones_pago],
     [campos.aprobador, orden.aprobador.email],
+    [campos.total, `${orden.moneda} ${formatearNumero(totalOrden(datos))}`],
+    [campos.excepciones, textoExcepciones(datos)],
   ];
 }
 
@@ -76,7 +82,7 @@ export function TarjetaOrdenCreada({ datos }: { readonly datos: DatosCreacion })
       </p>
       <p className={`mt-1 ${CLASES.textoSuave}`}>
         {TEXTOS_ORDEN.fecha}
-        {datos.fecha}
+        <time dateTime={datos.fecha}>{formatearFecha(datos.fecha)}</time>
       </p>
       {datos.ruta_evidencia && (
         <p className="mt-1 text-texto wrap-anywhere">
