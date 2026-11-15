@@ -29,8 +29,8 @@ Hallazgo del proceso actual: muchas OC se crean **después** de recibir la factu
 
 - **Sociedad / organización de compras**: unidad legal y de compras de Periferia (código 1000).
 - **Código SAP del proveedor**: identificador del proveedor en el maestro de SAP.
-- **Indicador de IVA**: C0 excluido, C1 IVA 19 %, C2 IVA 5 %.
-- **Condición de pago**: Z000 inmediato, Z015, Z030 y Z060 días fecha factura.
+- **Indicador de IVA** (referencia; los valores vigentes salen siempre de las herramientas): C0 excluido, C1 IVA 19 %, C2 IVA 5 %.
+- **Condición de pago** (referencia; los valores vigentes salen siempre de las herramientas): Z000 inmediato, Z015, Z030 y Z060 días fecha factura.
 - **Unidad**: UN unidades, H horas, MES meses.
 - **Texto breve**: la descripción de la posición en SAP admite 40 caracteres.
 
