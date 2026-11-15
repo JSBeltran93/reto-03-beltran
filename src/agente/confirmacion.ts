@@ -1,7 +1,10 @@
-import { fallo } from "../comun/resultado";
 import type { LlamadaHerramienta } from "../llm/adapter";
 import { NOMBRES_HERRAMIENTAS } from "../tools/oc/nombres";
 import { sinTildes } from "../tools/oc/normalizar";
+import { type Ejecucion, ejecucionFallida } from "./registro-herramientas";
+
+const MENSAJE_SIN_CONFIRMACION =
+  "El usuario no ha confirmado este caso. Pregunte al usuario y espere su respuesta.";
 
 /** Estado de confirmación que se guarda por sesión (CA3). */
 export interface EstadoConfirmacion {
@@ -11,9 +14,11 @@ export interface EstadoConfirmacion {
   otorgada: string | null;
 }
 
+/** Confirmaciones válidas: solo cuentan al inicio del mensaje. */
 const AFIRMATIVO =
-  /^(si|confirmo|confirmado|apruebo|aprobado|procede|adelante|ok|dale|de acuerdo)\b|\bconfirmo\b/;
-const NEGATIVO = /\b(no|cancela|cancelar|cancelo|rechazo|detente)\b/;
+  /^(si|confirmo|confirmado|apruebo|aprobado|procede|adelante|ok|dale|de acuerdo)\b/;
+/** Rechazos: empiezan con una palabra negativa o niegan la confirmación. */
+const NEGATIVO = /^(no|cancela|cancelar|cancelo|rechazo|detente)\b|\bno confirmo\b|\bcancela/;
 
 /**
  * Detecta una confirmación (sin importar tildes ni mayúsculas, sin negación).
@@ -61,18 +66,16 @@ function casoDe(llamada: LlamadaHerramienta): string | null {
  * mismo caso en su último mensaje: el modelo no puede confirmar por el usuario.
  * @param estado - estado de confirmación de la sesión
  * @param llamada - llamada pedida por el modelo
- * @returns error serializado para el modelo, o null si la llamada se permite
+ * @returns ejecución fallida para el modelo y el chat, o null si la llamada se permite
  */
-export function autorizar(estado: EstadoConfirmacion, llamada: LlamadaHerramienta): string | null {
+export function autorizar(
+  estado: EstadoConfirmacion,
+  llamada: LlamadaHerramienta,
+): Ejecucion | null {
   const args = llamada.args as { confirmado?: unknown } | null;
   if (llamada.nombre !== NOMBRES_HERRAMIENTAS.crear || args?.confirmado !== true) return null;
   if (estado.otorgada !== null && estado.otorgada === casoDe(llamada)) return null;
-  return JSON.stringify(
-    fallo(
-      "CONFIRMACION_NO_OTORGADA",
-      "El usuario no ha confirmado este caso. Pregunte al usuario y espere su respuesta.",
-    ),
-  );
+  return ejecucionFallida(llamada, "CONFIRMACION_NO_OTORGADA", MENSAJE_SIN_CONFIRMACION);
 }
 
 /**
