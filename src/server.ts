@@ -10,25 +10,34 @@ import express, { type Express, type NextFunction, type Request, type Response }
 
 import { type DependenciasCiclo, ejecutarTurno } from "./agente/ciclo";
 import { cargarPromptSistema } from "./agente/prompt-sistema";
+import { catalogoOc } from "./agente/registro-herramientas";
 import { AlmacenSesiones } from "./agente/sesiones";
 import { EsquemaSolicitudChat, type Salud, type VistaSesion } from "./comun/contratos-api";
+import { LimitadorSolicitudes } from "./comun/limitador";
 import { registradorJson } from "./comun/registrador";
 import { relojSistema } from "./comun/reloj";
 import { RUTAS_API } from "./comun/rutas-api";
 import { cargarConfiguracion } from "./configuracion";
+import type { AdaptadorLlm } from "./llm/adapter";
 import { AdaptadorAnthropic } from "./llm/anthropic";
+import { AdaptadorConRespaldo } from "./llm/respaldo";
+import { SapSimulado } from "./sap/mock";
+import { crearHerramientasOc } from "./tools/oc";
 
 /** Dependencias para construir la aplicación HTTP. */
 export interface DependenciasAplicacion {
   readonly ciclo: DependenciasCiclo;
   /** Ruta absoluta del front compilado (web/dist). */
   readonly carpetaEstaticos: string;
+  /** Limitador de mensajes de chat por IP; sin él no se limita (tests). */
+  readonly limitador?: LimitadorSolicitudes;
 }
 
 /** Códigos HTTP usados por la API. */
 const HTTP = {
   solicitudInvalida: 400,
   noEncontrado: 404,
+  demasiadasSolicitudes: 429,
   errorInterno: 500,
   primerErrorCliente: 400,
   primerErrorServidor: 500,
@@ -38,6 +47,7 @@ const HTTP = {
 const MENSAJES_HTTP = {
   solicitudInvalida: "Solicitud inválida: se requieren sessionId (UUID) y message.",
   sesionNoEncontrada: "Sesión no encontrada.",
+  demasiadasSolicitudes: "Demasiados mensajes seguidos. Espera un momento e intenta de nuevo.",
   rutaNoEncontrada: "Ruta de la API no encontrada.",
   errorCliente: "La solicitud no se pudo procesar. Revisa el formato y el tamaño del mensaje.",
   errorInterno: "Error interno. Intenta de nuevo.",
@@ -46,11 +56,34 @@ const MENSAJES_HTTP = {
 /** Tamaño máximo del cuerpo JSON aceptado. */
 const LIMITE_CUERPO_JSON = "32kb";
 
+/** Saltos de proxy confiables (Railway pone uno delante) para obtener la IP real. */
+const PROXIES_CONFIABLES = 1;
+
+/** Cabeceras de seguridad de todas las respuestas. */
+const CABECERAS_SEGURIDAD: Readonly<Record<string, string>> = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "no-referrer",
+  "Content-Security-Policy":
+    "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+};
+
 function cabecerasSeguridad(_req: Request, res: Response, next: NextFunction): void {
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("Referrer-Policy", "no-referrer");
+  for (const [nombre, valor] of Object.entries(CABECERAS_SEGURIDAD)) res.setHeader(nombre, valor);
   next();
+}
+
+function limitarChat(deps: DependenciasAplicacion) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const espera = deps.limitador?.registrar(req.ip ?? "desconocida") ?? 0;
+    if (espera === 0) {
+      next();
+      return;
+    }
+    res.setHeader("Retry-After", String(espera));
+    res.status(HTTP.demasiadasSolicitudes).json({ error: MENSAJES_HTTP.demasiadasSolicitudes });
+  };
 }
 
 function rutasApi(app: Express, deps: DependenciasAplicacion): void {
@@ -63,7 +96,7 @@ function rutasApi(app: Express, deps: DependenciasAplicacion): void {
     res.json(salud);
   });
 
-  app.post(RUTAS_API.chat, async (req, res) => {
+  app.post(RUTAS_API.chat, limitarChat(deps), async (req, res) => {
     const cuerpo = EsquemaSolicitudChat.safeParse(req.body);
     if (!cuerpo.success) {
       res.status(HTTP.solicitudInvalida).json({ error: MENSAJES_HTTP.solicitudInvalida });
@@ -119,6 +152,7 @@ function manejarError(deps: DependenciasAplicacion) {
 export function crearAplicacion(deps: DependenciasAplicacion): Express {
   const app = express();
   app.disable("x-powered-by");
+  app.set("trust proxy", PROXIES_CONFIABLES);
   app.use(cabecerasSeguridad);
   app.use(express.json({ limit: LIMITE_CUERPO_JSON }));
   rutasApi(app, deps);
@@ -130,18 +164,37 @@ export function crearAplicacion(deps: DependenciasAplicacion): Express {
   return app;
 }
 
+/**
+ * Modelo principal con respaldo: si el principal no está disponible, responde el de respaldo.
+ * @param config - configuración validada
+ * @returns adaptador LLM compuesto
+ */
+function crearLlm(config: ReturnType<typeof cargarConfiguracion>): AdaptadorLlm {
+  const anthropic = (modelo: string): AdaptadorLlm =>
+    new AdaptadorAnthropic({
+      apiKey: config.ANTHROPIC_API_KEY,
+      modelo,
+      timeoutMs: config.LLM_TIMEOUT_MS,
+    });
+  return new AdaptadorConRespaldo(
+    [anthropic(config.LLM_MODELO), anthropic(config.LLM_MODELO_RESPALDO)],
+    registradorJson,
+  );
+}
+
 /** Compone las dependencias reales y levanta el servidor (raíz de composición). */
 function iniciar(): void {
   const config = cargarConfiguracion();
   const raiz = process.cwd();
+  const herramientas = crearHerramientasOc({
+    crearSap: (raizCaso) => new SapSimulado(raizCaso, relojSistema),
+    reloj: relojSistema,
+  });
   const app = crearAplicacion({
     carpetaEstaticos: path.join(raiz, "web", "dist"),
+    limitador: new LimitadorSolicitudes(config.MAX_SOLICITUDES_MINUTO, relojSistema),
     ciclo: {
-      llm: new AdaptadorAnthropic({
-        apiKey: config.ANTHROPIC_API_KEY,
-        modelo: config.LLM_MODELO,
-        timeoutMs: config.LLM_TIMEOUT_MS,
-      }),
+      llm: crearLlm(config),
       sesiones: new AlmacenSesiones({
         maxSesiones: config.MAX_SESIONES,
         maxTokensDia: config.MAX_TOKENS_DIA,
@@ -152,12 +205,15 @@ function iniciar(): void {
       registrador: registradorJson,
       maxIteraciones: config.MAX_ITERACIONES,
       maxTokensSesion: config.MAX_TOKENS_SESION,
+      maxSegundosTurno: config.MAX_SEGUNDOS_TURNO,
+      catalogo: catalogoOc(herramientas),
     },
   });
   app.listen(config.PORT, () => {
     registradorJson.info("servidor_iniciado", {
       puerto: config.PORT,
       modelo: config.LLM_MODELO,
+      modeloRespaldo: config.LLM_MODELO_RESPALDO,
       claveConfigurada: config.ANTHROPIC_API_KEY !== "",
     });
   });

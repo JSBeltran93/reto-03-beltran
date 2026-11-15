@@ -13,6 +13,7 @@ import type {
 import { registrarLlamada } from "./bitacora";
 import { alMensajeUsuario, autorizar, trasHerramienta } from "./confirmacion";
 import {
+  type Catalogo,
   catalogoOc,
   definicionesLlm,
   type Ejecucion,
@@ -31,10 +32,32 @@ export interface DependenciasCiclo {
   readonly registrador: Registrador;
   readonly maxIteraciones: number;
   readonly maxTokensSesion: number;
+  /** Plazo máximo de un turno completo, en segundos. */
+  readonly maxSegundosTurno: number;
+  /** Herramientas disponibles; por defecto, las del PRD con SAP simulado. */
+  readonly catalogo?: Catalogo;
 }
 
-const CATALOGO = catalogoOc();
-const HERRAMIENTAS: readonly HerramientaLlm[] = definicionesLlm(CATALOGO);
+/** Milisegundos por segundo, para convertir el plazo del turno. */
+const MS_POR_SEGUNDO = 1000;
+
+const CATALOGO_POR_DEFECTO = catalogoOc();
+const definicionesPorCatalogo = new WeakMap<Catalogo, readonly HerramientaLlm[]>();
+
+/** Catálogo del turno: el inyectado o el por defecto. */
+function catalogoDe(deps: DependenciasCiclo): Catalogo {
+  return deps.catalogo ?? CATALOGO_POR_DEFECTO;
+}
+
+/** Definiciones JSON Schema del catálogo, calculadas una vez por catálogo. */
+function herramientasDe(deps: DependenciasCiclo): readonly HerramientaLlm[] {
+  const catalogo = catalogoDe(deps);
+  const enCache = definicionesPorCatalogo.get(catalogo);
+  if (enCache) return enCache;
+  const definiciones = definicionesLlm(catalogo);
+  definicionesPorCatalogo.set(catalogo, definiciones);
+  return definiciones;
+}
 const AVISO_TOPE =
   "Se alcanzó el límite de pasos de este turno. Resume para el usuario lo que ya se hizo y lo que falta, sin llamar herramientas.";
 const MENSAJES_SISTEMA = {
@@ -45,6 +68,8 @@ const MENSAJES_SISTEMA = {
   rechazo:
     "El modelo no puede ayudar con esa solicitud. Reformúlala sobre el proceso de órdenes de compra.",
   errorHerramienta: "Error inesperado al ejecutar la herramienta.",
+  plazo:
+    "El turno superó el tiempo máximo. Lo hecho hasta aquí quedó registrado; intenta de nuevo.",
 } as const;
 
 /** Turnos en curso por sesión: los turnos de una misma sesión se ejecutan en orden. */
@@ -54,6 +79,8 @@ interface Turno {
   readonly sesion: Sesion;
   readonly deps: DependenciasCiclo;
   readonly llamadas: VistaLlamada[];
+  /** Se activa cuando se agota el plazo del turno. */
+  readonly senal: AbortSignal;
 }
 
 function responder(
@@ -88,7 +115,10 @@ async function ejecutarSeguro(turno: Turno, llamada: LlamadaHerramienta): Promis
   const denegada = autorizar(sesion.confirmacion, llamada);
   if (denegada) return denegada;
   try {
-    return await ejecutarLlamada(CATALOGO, llamada, { directory: deps.raiz, sessionId: sesion.id });
+    return await ejecutarLlamada(catalogoDe(deps), llamada, {
+      directory: deps.raiz,
+      sessionId: sesion.id,
+    });
   } catch (error) {
     deps.registrador.error("error_herramienta", {
       herramienta: llamada.nombre,
@@ -137,7 +167,10 @@ async function consultarModelo(
     { rol: "sistema", contenido: deps.promptSistema },
     ...sesion.mensajes,
   ];
-  const resultado = await deps.llm.enviar(mensajes, HERRAMIENTAS, opciones);
+  const resultado = await deps.llm.enviar(mensajes, herramientasDe(deps), {
+    ...opciones,
+    senal: turno.senal,
+  });
   if (resultado.ok) {
     const { entrada, salida } = resultado.data.uso;
     deps.sesiones.registrarTokens(sesion, entrada + salida, hoy(deps.reloj));
@@ -185,13 +218,15 @@ async function ejecutarTurnoSinBloqueo(
   mensaje: string,
 ): Promise<RespuestaChat> {
   const sesion = deps.sesiones.obtenerOCrear(sessionId);
-  const turno: Turno = { sesion, deps, llamadas: [] };
+  const senal = AbortSignal.timeout(deps.maxSegundosTurno * MS_POR_SEGUNDO);
+  const turno: Turno = { sesion, deps, llamadas: [], senal };
   alMensajeUsuario(sesion.confirmacion, mensaje);
   sesion.historial.push({ tipo: "usuario", texto: mensaje });
   sesion.mensajes.push({ rol: "usuario", contenido: mensaje });
 
   for (let iteracion = 0; iteracion < deps.maxIteraciones; iteracion++) {
     if (presupuestoAgotado(turno)) return responder(turno, MENSAJES_SISTEMA.presupuesto, "error");
+    if (senal.aborted) return responder(turno, MENSAJES_SISTEMA.plazo, "error");
     const resultado = await consultarModelo(turno);
     if (!resultado.ok) return responder(turno, resultado.error.mensaje, "error");
     const final = await procesarRespuesta(turno, resultado.data);

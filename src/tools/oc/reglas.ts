@@ -197,6 +197,16 @@ const RC5: Regla = {
     if (cotizacion === null) {
       return [hallazgo("RC5", "confirmacion", "No hay cotización que respalde el valor.")];
     }
+    if (cotizacion.moneda !== solicitud.moneda) {
+      return [
+        hallazgo(
+          "RC5",
+          "confirmacion",
+          `La cotización está en ${cotizacion.moneda} y la solicitud en ${solicitud.moneda}: los valores no son comparables.`,
+          { valores: { moneda_solicitud: solicitud.moneda, moneda_cotizacion: cotizacion.moneda } },
+        ),
+      ];
+    }
     const diferencia = Math.abs(cotizacion.total - solicitud.valor_total);
     const relativa = solicitud.valor_total === 0 ? diferencia : diferencia / solicitud.valor_total;
     if (relativa <= TOLERANCIA_COTIZACION) return [];

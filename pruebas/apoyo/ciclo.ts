@@ -25,6 +25,7 @@ export function dependenciasCiclo(
     registrador: registradorSilencioso,
     maxIteraciones: 25,
     maxTokensSesion: 100_000,
+    maxSegundosTurno: 60,
     ...cambios,
   };
 }
