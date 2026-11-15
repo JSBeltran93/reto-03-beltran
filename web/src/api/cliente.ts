@@ -12,14 +12,15 @@ const CABECERA_REINTENTAR_DESPUES = "retry-after";
 
 /** Mensajes que se muestran al usuario cuando falla la comunicación con el servidor. */
 export const MENSAJES_ERROR_API = {
-  sinConexion: "No se pudo conectar con el servidor. Revisa tu conexión.",
-  tiempoAgotado: "El servidor tardó demasiado en responder.",
-  respuestaInvalida: "La respuesta del servidor no es válida.",
-  cancelada: "La solicitud se canceló.",
-  inesperado: "Ocurrió un error inesperado.",
-  mensajeInvalido: "El mensaje está vacío o es demasiado largo.",
+  sinConexion:
+    "No pude conectar con el asistente. Revisa tu conexión y reintenta en unos segundos.",
+  tiempoAgotado: "El asistente se está demorando más de lo normal. Reintenta en unos segundos.",
+  respuestaInvalida: "Recibí una respuesta que no pude leer. Reintenta en unos segundos.",
+  cancelada: "Se canceló el envío. Puedes volver a intentarlo.",
+  inesperado: "Algo salió mal de nuestro lado. Reintenta en unos segundos.",
+  mensajeInvalido: "Tu mensaje está vacío o es muy largo. Ajústalo y vuelve a enviarlo.",
   respuestaServidor: (estado: number): string =>
-    `El servidor respondió ${String(estado)}. Intenta de nuevo.`,
+    `Algo falló de nuestro lado (código ${String(estado)}). Reintenta en unos segundos.`,
 } as const;
 
 /** Estados HTTP que usa el front para clasificar errores. */

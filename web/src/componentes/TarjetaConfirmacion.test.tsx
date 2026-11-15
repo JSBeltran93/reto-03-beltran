@@ -27,11 +27,14 @@ describe("TarjetaConfirmacion", () => {
         alCancelar={alCancelar}
       />,
     );
-    const tarjeta = screen.getByRole("region", { name: /Confirma la OC de sol-004/ });
-    expect(within(tarjeta).getByText("solicitud")).toBeInTheDocument();
-    expect(within(tarjeta).getByText("25.000.000")).toBeInTheDocument();
-    expect(within(tarjeta).getByText("26.500.000,5")).toBeInTheDocument();
-    expect(within(tarjeta).getByText("COP")).toBeInTheDocument();
+    const tarjeta = screen.getByRole("region", { name: /¿Creamos la OC de sol-004\?/ });
+    expect(within(tarjeta).getByText(TEXTOS_CONFIRMACION.ayuda)).toBeInTheDocument();
+    expect(within(tarjeta).getByText("La cotización difiere 6 % de la solicitud.")).toBeVisible();
+    expect(within(tarjeta).getByText("RC5")).toBeInTheDocument();
+    expect(within(tarjeta).getByText("Solicitud")).toBeInTheDocument();
+    expect(within(tarjeta).getByText(/^COP\s25\.000\.000$/)).toBeInTheDocument();
+    expect(within(tarjeta).getByText(/^COP\s26\.500\.000,5$/)).toBeInTheDocument();
+    expect(within(tarjeta).getByText("Moneda")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: TEXTOS_CONFIRMACION.confirmar }));
     await userEvent.click(screen.getByRole("button", { name: TEXTOS_CONFIRMACION.cancelar }));
 
@@ -40,8 +43,8 @@ describe("TarjetaConfirmacion", () => {
   });
 
   it.each([
-    ["con caso", "sol-002", "Confirma la OC de sol-002"],
-    ["sin caso", null, TEXTOS_CONFIRMACION.titulo],
+    ["con caso", "sol-002", "¿Creamos la OC de sol-002\\?"],
+    ["sin caso", null, "¿Creamos la OC con estos datos\\?"],
   ])("titula la tarjeta %s", (_nombre, caso, titulo) => {
     render(
       <TarjetaConfirmacion

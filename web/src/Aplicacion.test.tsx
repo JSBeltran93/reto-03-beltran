@@ -66,7 +66,7 @@ const errorServidor = (): ErrorApi =>
   });
 
 const escribir = async (texto: string): Promise<void> => {
-  await userEvent.type(screen.getByLabelText("Mensaje para el agente"), `${texto}{Enter}`);
+  await userEvent.type(screen.getByLabelText("Mensaje para el asistente"), `${texto}{Enter}`);
 };
 
 beforeEach(() => {
@@ -92,10 +92,12 @@ describe("Aplicacion", () => {
     expect(await screen.findByText(TEXTOS_ENCABEZADO.enLinea)).toBeInTheDocument();
     await escribir("Procesa sol-004");
 
-    expect(await screen.findByRole("group", { name: "Llamada a oc_validar" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("group", { name: "Validé contra los maestros" }),
+    ).toBeInTheDocument();
     expect(screen.getByText(PREGUNTA)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /Confirma la OC de sol-004/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Confirmar y crear OC" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /¿Creamos la OC de/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sí, crear la OC" })).toBeInTheDocument();
   });
 
   it("rehidrata el historial guardado en el servidor al cargar", async () => {
@@ -116,7 +118,7 @@ describe("Aplicacion", () => {
     renderizarConConsultas(<Aplicacion />);
 
     expect(await screen.findByText(PREGUNTA)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /Confirma la OC de sol-004/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /¿Creamos la OC de/ })).toBeInTheDocument();
   });
 
   it("no muestra la confirmación al rehidratar si el servidor dice que no hay", async () => {
@@ -133,7 +135,7 @@ describe("Aplicacion", () => {
     renderizarConConsultas(<Aplicacion />);
 
     expect(await screen.findByText("Cancelado.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Confirmar y crear OC" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Sí, crear la OC" })).not.toBeInTheDocument();
   });
 
   it("muestra el error del sistema una sola vez, en el historial y con reintento", async () => {
@@ -169,7 +171,7 @@ describe("Aplicacion", () => {
 
     await escribir("¿y el IVA?");
 
-    expect(await screen.findByRole("button", { name: "Confirmar y crear OC" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Sí, crear la OC" })).toBeInTheDocument();
     expect(screen.getAllByText(reply)).toHaveLength(1);
     expect(
       screen.queryByRole("button", { name: TEXTOS_ESTADO.reintentar }),
@@ -302,7 +304,7 @@ describe("Aplicacion", () => {
     await escribir("hola");
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Nueva sesión" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: TEXTOS_ENCABEZADO.nuevaSesion })).toBeDisabled();
     });
   });
 
@@ -319,9 +321,7 @@ describe("Aplicacion", () => {
     await waitFor(() => {
       expect(vi.mocked(enviarMensaje).mock.calls[0]?.[0].message).toBe(mensajeProcesar("sol-004"));
     });
-    expect(
-      await screen.findByRole("heading", { name: /Confirma la OC de sol-004/ }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /¿Creamos la OC de/ })).toBeInTheDocument();
   });
 
   it("refresca la bandeja después de cada respuesta del agente", async () => {
@@ -336,7 +336,7 @@ describe("Aplicacion", () => {
     await escribir("Procesa sol-004");
 
     expect(
-      await screen.findByRole("button", { name: /Bolsa de 100 horas.*Pendiente/ }),
+      await screen.findByRole("button", { name: /Bolsa de 100 horas.*Esperando tu confirmación/ }),
     ).toBeInTheDocument();
     expect(obtenerCasos).toHaveBeenCalledTimes(2);
   });
@@ -389,7 +389,7 @@ describe("Aplicacion", () => {
     await userEvent.click(screen.getByRole("button", { name: /Bolsa de 100 horas/ }));
     expect(await screen.findByText(PREGUNTA)).toBeInTheDocument();
     expect(screen.queryByText(respuestaSol001.reply)).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /Confirma la OC de sol-004/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /¿Creamos la OC de/ })).toBeInTheDocument();
   });
 
   it("al recargar vuelve a seleccionar el caso de la sesión restaurada", async () => {

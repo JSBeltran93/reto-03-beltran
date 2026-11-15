@@ -3,7 +3,8 @@ import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { CLASES } from "./clases";
-import { TEXTOS_ENCABEZADO, TEXTOS_ESTADO } from "./textos";
+import { IconoDestello } from "./Iconos";
+import { TEXTOS_ESTADO } from "./textos";
 
 /** Autor de una burbuja: los tipos de entrada del historial que son mensajes. */
 export type AutorMensaje = Extract<EntradaHistorial["tipo"], "usuario" | "asistente">;
@@ -62,7 +63,7 @@ export function BurbujaMensaje({ autor, texto }: PropiedadesBurbujaMensaje) {
   if (autor === "usuario") {
     return (
       <div className="flex justify-end">
-        <p className="max-w-[85%] rounded-2xl rounded-br-md bg-marca px-4 py-2.5 text-sm leading-6 whitespace-pre-wrap text-sobre-marca wrap-anywhere">
+        <p className="max-w-[85%] rounded-2xl rounded-br-md bg-marca px-4 py-2.5 text-sm leading-6 whitespace-pre-wrap text-sobre-marca shadow-suave wrap-anywhere">
           <span className="sr-only">{TEXTOS_ESTADO.usuario}: </span>
           {texto}
         </p>
@@ -70,13 +71,13 @@ export function BurbujaMensaje({ autor, texto }: PropiedadesBurbujaMensaje) {
     );
   }
   return (
-    <article className={`${CLASES.tarjeta} px-4 py-3 text-sm leading-6 wrap-anywhere`}>
+    <article className={`${CLASES.tarjeta} px-5 py-4 text-sm leading-6 wrap-anywhere`}>
       <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-texto-suave">
         <span
           aria-hidden="true"
-          className="grid size-6 place-items-center rounded-full bg-marca-suave text-xs font-bold text-info"
+          className="grid size-6 place-items-center rounded-full bg-marca-suave text-info"
         >
-          {TEXTOS_ENCABEZADO.sigla}
+          <IconoDestello className="size-3.5" />
         </span>
         {TEXTOS_ESTADO.agente}
       </p>

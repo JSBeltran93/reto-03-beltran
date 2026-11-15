@@ -3,9 +3,10 @@ import { ESTADOS_CASO, type ResumenCaso } from "@contratos/contratos-api";
 import { CLASES } from "./clases";
 import { FichaEstadoCaso } from "./FichaEstadoCaso";
 import { formatearMonto } from "./formato";
+import { IconoVolver } from "./Iconos";
 import { TEXTOS_BANDEJA } from "./textos";
 
-/** Identificador de la ayuda de "Procesar" (lo usa `aria-describedby`). */
+/** Identificador de la ayuda de "Revisar solicitud" (lo usa `aria-describedby`). */
 const ID_AYUDA_PROCESAR = "ayuda-procesar";
 
 /** Props de {@link CabeceraCaso}. */
@@ -27,7 +28,7 @@ function BotonVolver({ alVolver }: Pick<PropiedadesCabeceraCaso, "alVolver">) {
       onClick={alVolver}
       className="anillo-foco -ml-2 inline-flex min-h-11 items-center gap-1 rounded-xl px-2 text-sm font-medium text-info lg:hidden"
     >
-      <span aria-hidden="true">←</span>
+      <IconoVolver />
       {TEXTOS_BANDEJA.volver}
     </button>
   );
@@ -39,8 +40,8 @@ function DatosCaso({ resumen }: { readonly resumen: ResumenCaso }) {
       <p className="mt-1 text-sm text-texto-suave">
         {resumen.proveedor} · {TEXTOS_BANDEJA.centro} {resumen.centro_costo}
       </p>
-      <p className="mt-2 flex flex-wrap items-center gap-2">
-        <span className="text-xl font-semibold tabular-nums">
+      <p className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="text-2xl font-semibold tracking-tight tabular-nums">
           {formatearMonto(resumen.valor_total, resumen.moneda)}
         </span>
         <FichaEstadoCaso estado={resumen.estado} />
@@ -53,7 +54,7 @@ function DatosCaso({ resumen }: { readonly resumen: ResumenCaso }) {
 }
 
 /**
- * Botón "Procesar": envía al agente el mensaje del PRD §11 para el caso.
+ * Botón "Revisar solicitud": envía al agente el mensaje del PRD §11 para el caso.
  * @param props - caso, estado deshabilitado y acción
  * @returns el botón
  */
@@ -78,9 +79,34 @@ function BotonProcesar({
 }
 
 /**
- * Cabecera del caso abierto: datos de negocio, estado y la acción principal "Procesar".
- * Un caso con la OC ya creada no ofrece "Procesar" (no hay nada que crear); se puede seguir
- * preguntando por el chat. En móvil incluye "← Bandeja".
+ * Identificación del caso: número de solicitud, descripción y datos de negocio.
+ * @param props - caso y su resumen, si ya se cargó
+ * @returns el bloque de identificación
+ */
+function IdentificacionCaso({
+  caso,
+  resumen,
+}: {
+  readonly caso: string;
+  readonly resumen: ResumenCaso | undefined;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-xs font-medium tracking-wide text-texto-suave uppercase">
+        {resumen?.solicitud_id ?? caso}
+      </p>
+      <h2 className="mt-1 text-lg leading-snug font-semibold tracking-tight wrap-anywhere">
+        {resumen?.descripcion ?? caso}
+      </h2>
+      {resumen && <DatosCaso resumen={resumen} />}
+    </div>
+  );
+}
+
+/**
+ * Cabecera del caso abierto: datos de negocio, estado y la acción principal "Revisar solicitud".
+ * Un caso con la OC ya creada no ofrece "Revisar solicitud" (no hay nada que crear); se puede seguir
+ * preguntando por el chat. En móvil incluye el botón para volver a las solicitudes.
  * @param props - caso, resumen, estado y acciones
  * @returns la cabecera, o solo el botón de volver si no hay caso
  */
@@ -94,25 +120,16 @@ export function CabeceraCaso({
   if (caso === null) return <BotonVolver alVolver={alVolver} />;
   const procesable = resumen?.estado !== ESTADOS_CASO.creada;
   return (
-    <section aria-label={caso} className={`${CLASES.tarjeta} p-4 sm:p-5`}>
+    <section aria-label={resumen?.solicitud_id ?? caso} className={`${CLASES.tarjeta} p-5 sm:p-6`}>
       <BotonVolver alVolver={alVolver} />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-texto-suave">
-            {caso}
-            {resumen && ` · ${resumen.solicitud_id}`}
-          </p>
-          <h2 className="mt-0.5 text-base font-semibold wrap-anywhere">
-            {resumen?.descripcion ?? caso}
-          </h2>
-          {resumen && <DatosCaso resumen={resumen} />}
-        </div>
+        <IdentificacionCaso caso={caso} resumen={resumen} />
         {procesable && (
           <BotonProcesar caso={caso} deshabilitado={deshabilitado} alProcesar={alProcesar} />
         )}
       </div>
       {procesable && (
-        <p id={ID_AYUDA_PROCESAR} className="mt-3 text-xs text-texto-suave">
+        <p id={ID_AYUDA_PROCESAR} className="mt-4 text-xs leading-5 text-texto-suave">
           {TEXTOS_BANDEJA.ayudaProcesar}
         </p>
       )}
