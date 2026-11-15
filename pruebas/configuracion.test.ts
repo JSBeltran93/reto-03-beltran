@@ -9,7 +9,19 @@ describe("cargarConfiguracion", () => {
     expect(configuracion.LLM_MODELO).toBe(VALORES_POR_DEFECTO.modelo);
     expect(configuracion.LLM_MODELO_RESPALDO).toBe(VALORES_POR_DEFECTO.modeloRespaldo);
     expect(configuracion.MAX_SEGUNDOS_TURNO).toBe(VALORES_POR_DEFECTO.maxSegundosTurno);
-    expect(configuracion.ANTHROPIC_API_KEY).toBe("");
+    expect(configuracion.GEMINI_API_KEY).toBe("");
+  });
+
+  it("lee la clave de Gemini", () => {
+    expect(cargarConfiguracion({ GEMINI_API_KEY: "g" }).GEMINI_API_KEY).toBe("g");
+  });
+
+  it("respeta los modelos fijados en el entorno", () => {
+    expect(cargarConfiguracion({ LLM_MODELO: "otro" }).LLM_MODELO).toBe("otro");
+  });
+
+  it("trata un modelo vacío como no definido", () => {
+    expect(cargarConfiguracion({ LLM_MODELO: "" }).LLM_MODELO).toBe(VALORES_POR_DEFECTO.modelo);
   });
 
   it("convierte números desde texto", () => {
