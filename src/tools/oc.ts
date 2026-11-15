@@ -7,10 +7,14 @@ import { z } from "zod";
 import { huella } from "../comun/huella";
 import { relojSistema } from "../comun/reloj";
 import { exito } from "../comun/resultado";
+import { SapSimulado } from "../sap/mock";
 import { evaluarCaso } from "./oc/caso";
-import { EsquemaPaquete } from "./oc/esquemas";
+import { crearOrdenCaso } from "./oc/crear-orden";
+import { EsquemaOrdenCompra, EsquemaPaquete } from "./oc/esquemas";
+import { generarEvidencia, hashEvidenciaCaso } from "./oc/evidencia";
 import { definirHerramienta } from "./oc/herramienta";
 import { leerPaquete } from "./oc/paquete";
+import { construirOrden, guardarTrazabilidad } from "./oc/payload";
 import { registrarControl, RESULTADOS_CONTROL } from "./oc/registro-control";
 import type { Validacion } from "./oc/validacion";
 
@@ -58,4 +62,61 @@ export const validar = definirHerramienta({
     const alterado = huella(args.paquete) !== huella(fuente);
     return exito(alterado ? { ...validacion, aviso: AVISO_PAQUETE_DISTINTO } : validacion);
   },
+});
+
+/** `oc_construir_payload`: construye la OC de SAP y su archivo de trazabilidad (HU-3). */
+export const construir_payload = definirHerramienta({
+  description:
+    "Construye la orden de compra tal como quedaría en SAP, con la trazabilidad de cada valor, a partir de un paquete validado.",
+  args: {
+    caso,
+    paquete,
+    derivados: z
+      .record(z.string(), z.unknown())
+      .describe("Valores derivados devueltos por oc_validar"),
+  },
+  ejecutar: (args, ctx) => {
+    const evaluado = evaluarCaso(ctx.directory, args.caso);
+    if (!evaluado.ok) return evaluado;
+    const hash = hashEvidenciaCaso(ctx.directory, args.caso);
+    if (!hash.ok) return hash;
+    const orden = construirOrden(evaluado.data.paquete, evaluado.data.validacion, hash.data);
+    if (!orden.ok) return orden;
+    const ruta = guardarTrazabilidad(ctx.directory, args.caso, orden.data);
+    return exito({ orden: orden.data.orden, ruta_trazabilidad: ruta });
+  },
+});
+
+/** `oc_generar_evidencia`: escribe la evidencia de aprobación (txt con sha256 y pdf) (HU-4). */
+export const generar_evidencia = definirHerramienta({
+  description:
+    "Genera la evidencia del correo de aprobación (texto con sha256 y PDF) para adjuntarla a la orden de compra.",
+  args: { caso },
+  ejecutar: (args, ctx) => generarEvidencia(ctx.directory, args.caso),
+});
+
+/** `oc_crear`: crea la orden de compra en el SAP simulado (HU-5). */
+export const crear = definirHerramienta({
+  description:
+    "Crea la orden de compra en SAP; solo funciona si el caso es apto y, cuando hay confirmaciones, si el usuario ya confirmó.",
+  args: {
+    caso,
+    payload: EsquemaOrdenCompra.describe(
+      "Orden de compra devuelta por oc_construir_payload, sin cambios",
+    ),
+    confirmado: z
+      .boolean()
+      .optional()
+      .describe("true solo si el usuario confirmó explícitamente en su último mensaje"),
+  },
+  ejecutar: (args, ctx) =>
+    crearOrdenCaso(
+      {
+        raiz: ctx.directory,
+        sap: new SapSimulado(ctx.directory),
+        reloj: relojSistema,
+        confirmadoPor: `sesion:${ctx.sessionId}`,
+      },
+      { caso: args.caso, payload: args.payload, confirmado: args.confirmado === true },
+    ),
 });
