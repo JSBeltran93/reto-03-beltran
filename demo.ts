@@ -18,7 +18,7 @@ import type { Validacion } from "./src/tools/oc/validacion";
 const CASOS = ["sol-001", "sol-002", "sol-003", "sol-004", "sol-005", "sol-006"] as const;
 const CASOS_CONFIRMADOS = ["sol-004", "sol-005"] as const;
 const ANCHO_CASO = 8;
-const LARGO_MAXIMO_LINEA = 120;
+const SANGRIA = " ".repeat(ANCHO_CASO + 1);
 const ctx: ContextoHerramienta = { directory: process.cwd(), sessionId: "demo" };
 
 /** Casos aptos que quedaron esperando confirmación, con su validación. */
@@ -36,14 +36,40 @@ function imprimirFila(caso: string, v: Validacion, resultado: string): void {
   );
 }
 
+/** Imprime cada hallazgo completo (regla y motivo) y, aparte, su acción sugerida. */
+function imprimirMotivos(hallazgos: readonly Hallazgo[]): void {
+  for (const h of hallazgos) {
+    console.log(`${SANGRIA}motivo ${h.regla}: ${h.detalle}`);
+    if (h.accion_sugerida) console.log(`${SANGRIA}acción sugerida: ${h.accion_sugerida}`);
+  }
+}
+
+/**
+ * Llama a `oc_crear` y devuelve el número de OC, o el código del error; el motivo completo y la
+ * acción sugerida del error se imprimen en líneas aparte, sin truncar.
+ */
 async function intentarCrear(
   caso: string,
   payload: OrdenCompra,
   confirmado: boolean,
-): Promise<string> {
+): Promise<{ resumen: string; detalle: string[] }> {
   const r = interpretar<OrdenCreada>(await crear.execute({ caso, payload, confirmado }, ctx));
-  if (r.ok) return `OC ${r.data.numero_oc}${r.data.idempotente ? " (idempotente)" : ""}`;
-  return `${r.error.codigo}: ${r.error.mensaje}`.slice(0, LARGO_MAXIMO_LINEA);
+  if (r.ok) {
+    const idempotente = r.data.idempotente ? " (idempotente)" : "";
+    return { resumen: `OC ${r.data.numero_oc}${idempotente}`, detalle: [] };
+  }
+  const accion = r.error.accion_sugerida ? [`acción sugerida: ${r.error.accion_sugerida}`] : [];
+  return {
+    resumen: `sin OC → ${r.error.codigo}`,
+    detalle: [`motivo: ${r.error.mensaje}`, ...accion],
+  };
+}
+
+/** Imprime el resultado de un intento de creación con su detalle sangrado. */
+async function imprimirCreacion(caso: string, payload: OrdenCompra, confirmado: boolean) {
+  const { resumen, detalle } = await intentarCrear(caso, payload, confirmado);
+  console.log(`${caso.padEnd(ANCHO_CASO)} | ${resumen}`);
+  for (const linea of detalle) console.log(`${SANGRIA}${linea}`);
 }
 
 async function leerYValidar(caso: string): Promise<[Paquete, Validacion] | null> {
@@ -61,11 +87,8 @@ async function procesarCaso(caso: string): Promise<OrdenCompra | null> {
   if (!leido) return null;
   const [paquete, v] = leido;
   if (!v.apta) {
-    imprimirFila(
-      caso,
-      v,
-      `sin OC → ${v.bloqueos[0]?.accion_sugerida ?? ""}`.slice(0, LARGO_MAXIMO_LINEA),
-    );
+    imprimirFila(caso, v, "sin OC (bloqueada)");
+    imprimirMotivos(v.bloqueos);
     return null;
   }
   const payload = interpretar<{ orden: OrdenCompra }>(
@@ -73,7 +96,9 @@ async function procesarCaso(caso: string): Promise<OrdenCompra | null> {
   );
   await generar_evidencia.execute({ caso }, ctx);
   if (!payload.ok) return null;
-  imprimirFila(caso, v, await intentarCrear(caso, payload.data.orden, false));
+  const { resumen } = await intentarCrear(caso, payload.data.orden, false);
+  imprimirFila(caso, v, resumen);
+  imprimirMotivos(v.confirmaciones);
   if (v.confirmaciones.length > 0) pendientes.set(caso, v);
   return payload.data.orden;
 }
@@ -89,16 +114,12 @@ async function principal(): Promise<void> {
 
   console.log("\n== Idempotencia: sol-001 por segunda vez ==");
   const primera = ordenes.get("sol-001");
-  if (primera)
-    console.log(
-      `${"sol-001".padEnd(ANCHO_CASO)} | ${await intentarCrear("sol-001", primera, false)}`,
-    );
+  if (primera) await imprimirCreacion("sol-001", primera, false);
 
   console.log("\n== Confirmación explícita del usuario (confirmado: true) ==");
   for (const caso of CASOS_CONFIRMADOS) {
     const orden = ordenes.get(caso);
-    if (orden)
-      console.log(`${caso.padEnd(ANCHO_CASO)} | ${await intentarCrear(caso, orden, true)}`);
+    if (orden) await imprimirCreacion(caso, orden, true);
   }
   for (const [caso, v] of pendientes) {
     if (CASOS_CONFIRMADOS.some((confirmado) => confirmado === caso)) continue;

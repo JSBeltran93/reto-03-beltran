@@ -98,19 +98,39 @@ describe("oc_crear", () => {
 
     expect(existsSync(path.join(raiz, r.data.ruta_evidencia))).toBe(true);
   });
-  it("construir_payload deja la solicitud como pendiente una sola vez y crear la marca creada", async () => {
+  it("cada llamada a crear agrega una fila a control.csv, sin deduplicar (HU-5)", async () => {
     const raiz = crearProyectoTemporal();
-    await payloadDe(raiz, "sol-004");
     const payload = await payloadDe(raiz, "sol-004");
+    const alterado = { ...payload, moneda: "USD" as const };
+    await crearOrden(raiz, "sol-004", payload);
+    await crearOrden(raiz, "sol-004", payload);
+    await crearOrden(raiz, "sol-004", alterado, true);
     await crearOrden(raiz, "sol-004", payload, true);
+    await crearOrden(raiz, "sol-004", payload, true);
+    await crearOrden(raiz, "sol-002", payload, true);
 
     const lineas = readFileSync(path.join(raiz, "out", "control.csv"), "utf8")
       .trim()
-      .split("\n");
+      .split("\n")
+      .slice(1)
+      .map((linea) => linea.split(",").slice(0, 6).join(","));
 
-    expect(lineas).toHaveLength(3);
-    expect(lineas[1]).toMatch(/^SOL-2026-004,pendiente,,false,,RC5,/);
-    expect(lineas[2]).toMatch(/^SOL-2026-004,creada,4500000001,false,,RC5,/);
+    expect(lineas).toEqual([
+      "SOL-2026-004,pendiente,,false,,RC5",
+      "SOL-2026-004,pendiente,,false,,RC5",
+      "SOL-2026-004,bloqueada,,false,,RC5",
+      "SOL-2026-004,creada,4500000001,false,,RC5",
+      "SOL-2026-004,idempotente,4500000001,false,,RC5",
+      "SOL-2026-002,bloqueada,,false,RC1,",
+    ]);
+  });
+
+  it("construir_payload no escribe en control.csv", async () => {
+    const raiz = crearProyectoTemporal();
+
+    await payloadDe(raiz, "sol-004");
+
+    expect(existsSync(path.join(raiz, "out", "control.csv"))).toBe(false);
   });
 
   it("dos creaciones simultáneas del mismo caso dan una creada y una idempotente", async () => {

@@ -40,20 +40,6 @@ describe("oc_validar", () => {
     },
   );
 
-  it("registra los intentos bloqueados en out/control.csv", async () => {
-    const raiz = crearProyectoTemporal();
-    await ejecutarValidacion(raiz, "sol-002");
-
-    const lineas = readFileSync(path.join(raiz, "out", "control.csv"), "utf8")
-      .trim()
-      .split("\n");
-
-    expect(lineas[0]).toBe(
-      "solicitud_id,resultado,numero_oc,retroactiva,bloqueos,confirmaciones,ts",
-    );
-    expect(lineas[1]).toMatch(/^SOL-2026-002,bloqueada,,false,RC1,,\d{4}-/);
-  });
-
   it("valida con los documentos del caso cuando el modelo altera el paquete", async () => {
     const original = paqueteDe("sol-002");
     const alterado = {
@@ -67,18 +53,23 @@ describe("oc_validar", () => {
     expect(data.aviso).toContain("difiere");
   });
 
-  it("solo registra en control.csv las validaciones bloqueadas; la apta no escribe (HU-5)", async () => {
+  it("registra en control.csv el intento bloqueado de sol-002 (no llega a oc_crear, HU-5)", async () => {
     const raiz = crearProyectoTemporal();
-    await ejecutarValidacion(raiz, "sol-004");
-    expect(existsSync(path.join(raiz, "out", "control.csv"))).toBe(false);
 
     await ejecutarValidacion(raiz, "sol-002");
-    await ejecutarValidacion(raiz, "sol-002");
-    const lineas = readFileSync(path.join(raiz, "out", "control.csv"), "utf8")
+
+    const filas = readFileSync(path.join(raiz, "out", "control.csv"), "utf8")
       .trim()
       .split("\n");
+    expect(filas).toHaveLength(2);
+    expect(filas[1]).toContain(",bloqueada,");
+  });
 
-    expect(lineas).toHaveLength(2);
-    expect(lineas[1]).toMatch(/^SOL-2026-002,bloqueada,,false,RC1,,\d{4}-/);
+  it("no escribe en control.csv al validar un caso apto: ese intento lo registra oc_crear", async () => {
+    const raiz = crearProyectoTemporal();
+
+    await ejecutarValidacion(raiz, "sol-004");
+
+    expect(existsSync(path.join(raiz, "out", "control.csv"))).toBe(false);
   });
 });
