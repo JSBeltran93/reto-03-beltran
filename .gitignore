@@ -5,3 +5,7 @@ out/
 coverage/
 *.zip
 *.tsbuildinfo
+*.log
+*.local
+.DS_Store
+.idea/
