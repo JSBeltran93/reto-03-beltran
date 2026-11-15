@@ -78,8 +78,8 @@ Reglas para cualquier sesión de Claude Code que trabaje en este repositorio.
 
 ## Git
 
-Nunca se commitea en `main`. Una rama por bloque (`chore/*`, `feature/*`, `documentacion/*`), integrada a `develop` con `--no-ff` y push.
-Conventional Commits en inglés, atómicos, con asunto en imperativo de máximo 72 caracteres y cuerpo con el porqué.
+Nunca se commitea en `main`. Una rama por bloque (`chore/*`, `feature/*`, `docs/*`), integrada a `develop` con `--no-ff`. Push solo cuando todo funciona en local.
+Conventional Commits en inglés, atómicos, con asunto en imperativo de máximo 72 caracteres y cuerpo con el porqué. Alcances permitidos: `oc`, `sap`, `llm`, `agente`, `comun`, `api`, `web`, `docs`, `deps`, `ci`, `test`.
 Nunca se commitean `.env`, `out/`, `node_modules/`, `web/dist/`, `coverage/`.
 
 ## Uso de IA
