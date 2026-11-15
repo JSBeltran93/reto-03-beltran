@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { construir_payload, crear, leer_paquete } from "../../../src/tools/oc";
+import { AVISO_PAYLOAD_DISTINTO } from "../../../src/tools/oc/crear-orden";
 import type { OrdenCompra, Paquete } from "../../../src/tools/oc/esquemas";
 import { contexto, crearProyectoTemporal, leerJsonTexto } from "../../apoyo/proyecto";
 
@@ -66,7 +67,7 @@ describe("oc_crear", () => {
     });
   });
 
-  it("rechaza un payload alterado después de la validación", async () => {
+  it("ignora un payload alterado y crea la OC con el validado, avisando", async () => {
     const raiz = crearProyectoTemporal();
     const payload = await payloadDe(raiz, "sol-004");
     const [posicion] = payload.posiciones;
@@ -74,9 +75,11 @@ describe("oc_crear", () => {
     const alterado = { ...payload, posiciones: [{ ...posicion, precio_unitario: 265_000 }] };
 
     expect(await crearOrden(raiz, "sol-004", alterado, true)).toMatchObject({
-      ok: false,
-      error: { codigo: "PAYLOAD_ALTERADO" },
+      ok: true,
+      data: { aviso: AVISO_PAYLOAD_DISTINTO },
     });
+    const ordenes = readFileSync(path.join(raiz, "out", "sap", "ordenes.jsonl"), "utf8");
+    expect(ordenes).not.toContain("265000");
   });
 
   it("devuelve ARGS_INVALIDOS en lugar de lanzar ante argumentos mal formados", async () => {
@@ -101,10 +104,8 @@ describe("oc_crear", () => {
   it("cada llamada a crear agrega una fila a control.csv, sin deduplicar (HU-5)", async () => {
     const raiz = crearProyectoTemporal();
     const payload = await payloadDe(raiz, "sol-004");
-    const alterado = { ...payload, moneda: "USD" as const };
     await crearOrden(raiz, "sol-004", payload);
     await crearOrden(raiz, "sol-004", payload);
-    await crearOrden(raiz, "sol-004", alterado, true);
     await crearOrden(raiz, "sol-004", payload, true);
     await crearOrden(raiz, "sol-004", payload, true);
     await crearOrden(raiz, "sol-002", payload, true);
@@ -118,7 +119,6 @@ describe("oc_crear", () => {
     expect(lineas).toEqual([
       "SOL-2026-004,pendiente,,false,,RC5",
       "SOL-2026-004,pendiente,,false,,RC5",
-      "SOL-2026-004,bloqueada,,false,,RC5",
       "SOL-2026-004,creada,4500000001,false,,RC5",
       "SOL-2026-004,idempotente,4500000001,false,,RC5",
       "SOL-2026-002,bloqueada,,false,RC1,",
