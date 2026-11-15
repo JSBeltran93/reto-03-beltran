@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ejecutarTurno } from "../../src/agente/ciclo";
+import type { AdaptadorLlm } from "../../src/llm/adapter";
 import * as herramientasOc from "../../src/tools/oc";
 import { dependenciasCiclo } from "../apoyo/ciclo";
 import { crearProyectoTemporal } from "../apoyo/proyecto";
@@ -84,4 +85,25 @@ describe("robustez del ciclo del agente (CA5)", () => {
       expect(r.esError).toBe(true);
     },
   );
+});
+
+describe("plazo máximo del turno", () => {
+  it("corta el turno con un mensaje claro cuando se agota el plazo", async () => {
+    const lento: AdaptadorLlm = {
+      proveedor: "falso",
+      modelo: "lento",
+      enviar: (_mensajes, _herramientas, opciones) =>
+        new Promise((resolver) => {
+          opciones?.senal?.addEventListener("abort", () => {
+            resolver(pedirHerramientas({ nombre: "oc_leer_paquete", args: { caso: "sol-001" } }));
+          });
+        }),
+    };
+    const deps = dependenciasCiclo(lento, crearProyectoTemporal(), { maxSegundosTurno: 1 });
+
+    const r = await ejecutarTurno(deps, "s-plazo", "procesa sol-001");
+
+    expect(r.esError).toBe(true);
+    expect(r.reply).toContain("tiempo máximo");
+  });
 });

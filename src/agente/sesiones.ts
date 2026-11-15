@@ -18,8 +18,9 @@ export interface LimitesSesiones {
 }
 
 /**
- * Almacén de sesiones en memoria con tope de sesiones (se descarta la más antigua)
- * y presupuesto diario de tokens compartido, para que el link público no agote la clave.
+ * Almacén de sesiones en memoria con tope de sesiones (se descarta la usada hace más
+ * tiempo, LRU) y presupuesto diario de tokens compartido, para que el link público no
+ * agote la clave.
  */
 export class AlmacenSesiones {
   private readonly sesiones = new Map<string, Sesion>();
@@ -35,11 +36,11 @@ export class AlmacenSesiones {
    * @returns la sesión
    */
   obtenerOCrear(id: string): Sesion {
-    const existente = this.sesiones.get(id);
+    const existente = this.obtener(id);
     if (existente) return existente;
     if (this.sesiones.size >= this.limites.maxSesiones) {
-      const masAntigua = this.sesiones.keys().next().value;
-      if (masAntigua !== undefined) this.sesiones.delete(masAntigua);
+      const menosReciente = this.sesiones.keys().next().value;
+      if (menosReciente !== undefined) this.sesiones.delete(menosReciente);
     }
     const nueva: Sesion = {
       id,
@@ -57,7 +58,13 @@ export class AlmacenSesiones {
    * @returns la sesión, o undefined
    */
   obtener(id: string): Sesion | undefined {
-    return this.sesiones.get(id);
+    const sesion = this.sesiones.get(id);
+    if (sesion) {
+      // Reinsertar la mueve al final: el Map queda ordenado de menos a más reciente (LRU).
+      this.sesiones.delete(id);
+      this.sesiones.set(id, sesion);
+    }
+    return sesion;
   }
 
   /**
