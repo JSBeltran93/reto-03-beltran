@@ -36,12 +36,13 @@ Reglas de dependencia: el dominio (`src/tools/oc/`) nunca importa el ciclo del a
 - **Todo en español**: identificadores, archivos y carpetas propios, códigos de error, variables de entorno, JSDoc, tests y documentación.
 - **Excepción**: los nombres que el PRD fija en inglés se usan literalmente: archivos de su estructura sugerida (`server.ts`, `llm/adapter.ts`, `sap/adapter.ts`, `sap/mock.ts`, `tools/`, `knowledge/`, `agent/`, `web/`, `demo.ts`) y los términos de sus contratos (`description`, `args`, `execute`, `ctx.directory`, `sessionId`, `reply`, `toolCalls`, `needsConfirmation`, `ok`, `data`, `error`, `provider`, `model`).
 - **Mensajes de commit en inglés** (Conventional Commits).
+- Lista cerrada completa de nombres en inglés permitidos en [`CLAUDE.md`](CLAUDE.md) (§ Idioma); cualquier otro nombre en inglés es un error.
 
 ## Ramas
 
 - `main` solo recibe el pull request final desde `develop`. Nunca se commitea directo.
 - `develop` es la rama de integración y la fuente del despliegue.
-- Se trabaja en una rama por bloque: `chore/*`, `feature/*`, `documentacion/*`. Se integra a `develop` con `git merge --no-ff` y se hace push.
+- Se trabaja en una rama por bloque: `chore/*`, `feature/*`, `docs/*`. Se integra a `develop` con `git merge --no-ff`; el push se hace solo cuando todo funciona en local.
 
 ## Commits
 

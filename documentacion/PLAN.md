@@ -1,6 +1,8 @@
 # Plan de implementación — Reto 03 "Órdenes de Compra SAP"
 
-> Plan de arquitectura e implementación para ejecutar el reto en **120 minutos**, anclado a `reto-03/PRD.md`. **No se escribe código ni se crea el repositorio hasta iniciar el reloj.**
+> **Nota:** este es el plan previo a la implementación. Donde difiera del código, mandan el código, `SOLUCION.md`, `CONTRIBUTING.md` y las decisiones en `documentacion/decisiones/`.
+
+> Plan de arquitectura e implementación para ejecutar el reto en **120 minutos**, anclado a `documentacion/PRD.md`. **No se escribe código ni se crea el repositorio hasta iniciar el reloj.**
 >
 > Etiquetas: **[PRD §x]** = requisito literal · **[Decisión]** = elección donde el PRD da libertad (va a `SOLUCION.md` §8) · **[Supuesto]** = interpretación donde el PRD es ambiguo (va a `SOLUCION.md` §9).
 
@@ -64,11 +66,11 @@ El PRD ya define dos **puertos** con interfaz propia y adaptadores intercambiabl
 | Capa | Componente PRD §6.1 | Carpeta | Responsabilidad | Depende de |
 |---|---|---|---|---|
 | **Presentación** | Front de chat | `web/` | Historial, entrada, "pensando", tool calls, confirmación resaltada | API HTTP (contratos compartidos) |
-| **Entrada (adaptador primario)** | Backend: API | `src/server.ts`, `src/server.ts (crearAplicacion)` | Rutas §6.4, validación de requests, estáticos | Runtime del agente |
+| **Entrada (adaptador primario)** | Backend: API | `src/server.ts` (`crearAplicacion`) | Rutas §6.4, validación de requests, estáticos | Runtime del agente |
 | **Aplicación** | Backend: ciclo del agente y sesiones | `src/agente/` | Bucle CA1–CA5, sesiones, compuerta de confirmación, registro de herramientas, bitácora | Puerto LLM, herramientas |
 | **Comportamiento** | System prompt | `agent/prompt.md` | Cómo actúa el agente | — |
 | **Conocimiento** | Conocimiento del proceso | `src/knowledge/ordenes-compra.md` | Qué significa cada regla y término | — |
-| **Ejecución (dominio)** | Herramientas | `src/tools/oc.ts` + `src/tools/oc/` | Contrato de herramientas + reglas RC1–RC10, parsers, payload, evidencia, control | Puerto SAP |
+| **Ejecución (dominio)** | Herramientas | `src/tools/oc.ts` + `src/tools/oc/` | Contrato de herramientas + reglas RC1–RC10, extractores, payload, evidencia, registro de control | Puerto SAP |
 | **Puertos** | Adaptador LLM · SapAdapter | `src/llm/adapter.ts` · `src/sap/adapter.ts` | Interfaces | — |
 | **Adaptadores secundarios** | Implementaciones | `src/llm/anthropic.ts` · `src/sap/mock.ts` | Anthropic SDK · archivos en `out/sap/` | SDK / sistema de archivos |
 | **Datos** | fixtures / out | `fixtures/` (lectura) · `out/` (escritura) | Insumos y resultados | — |
@@ -79,20 +81,20 @@ Separación que el PRD evalúa (§6.5): **comportamiento** `agent/prompt.md` · 
 
 ```
             ┌───────────────────────── web/ (React + Tailwind) ─────────────────────────┐
-            │ App · Header · MessageList · ToolCallCard · ConfirmationBanner · Composer │
+            │ Aplicacion · Encabezado · ListaMensajes · TarjetaHerramienta · BannerConfirmacion · Compositor │
             └───────────────────────────────┬───────────────────────────────────────────┘
                                             │ HTTP JSON  (src/comun/contratos-api.ts)
 ┌───────────────────────────────────────────▼───────────────────────────────────────────┐
-│ src/server.ts → src/server.ts (crearAplicacion)        POST /api/chat · GET /api/sessions/:id · /api/health │
+│ src/server.ts (crearAplicacion)        POST /api/chat · GET /api/sessions/:id · /api/health │
 ├────────────────────────────────────────────────────────────────────────────────────────┤
-│ src/agente/   loop · sessions · confirmation-gate · tool-registry · audit-log ·       │
-│                system-prompt (agent/prompt.md + src/knowledge/ordenes-compra.md)       │
+│ src/agente/   ciclo · sesiones · confirmacion · registro-herramientas · bitacora ·       │
+│                prompt-sistema (agent/prompt.md + src/knowledge/ordenes-compra.md)       │
 │        │ puerto LLM                                   │ catálogo oc_<export>           │
 │        ▼                                              ▼                                │
 │ src/llm/adapter.ts ◀── src/llm/anthropic.ts    src/tools/oc.ts (5 herramientas)        │
 │                                                       │                                │
 │                                                       ▼                                │
-│                                   src/tools/oc/  esquemas · fixtures · parsers ·       │
+│                                   src/tools/oc/  esquemas · fixtures · extractores ·       │
 │                                                  reglas · payload · evidencia · control│
 │                                                       │ puerto SAP                     │
 │                                                       ▼                                │
@@ -106,13 +108,13 @@ Separación que el PRD evalúa (§6.5): **comportamiento** `agent/prompt.md` · 
 
 | Módulo | Puede importar | Nunca importa |
 |---|---|---|
-| `src/tools/oc/*` | zod, `node:*`, `src/comun/*`, `src/sap/adapter.ts` | `runtime`, `llm`, `app`, Express, SDK de Anthropic |
-| `src/tools/oc.ts` | `src/tools/oc/*`, `src/sap/*`, `src/comun/*` | `runtime`, `llm`, `app` |
+| `src/tools/oc/*` | zod, `node:*`, `src/comun/*`, `src/sap/adapter.ts` | `agente`, `llm`, `app`, Express, SDK de Anthropic |
+| `src/tools/oc.ts` | `src/tools/oc/*`, `src/sap/*`, `src/comun/*` | `agente`, `llm`, `app` |
 | `src/agente/*` | `src/llm/adapter.ts`, `src/tools/oc.ts`, `src/comun/*` | `src/llm/anthropic.ts`, Express |
 | `src/server.ts (crearAplicacion)` | `src/agente/*`, `src/comun/*` | `src/tools/oc/*` |
 | `src/server.ts` | `src/server.ts (crearAplicacion)`, `src/llm/anthropic.ts`, `src/configuracion.ts` (composición) | — |
 | `web/src/*` | `src/comun/contratos-api.ts` (alias `@contratos`) | Cualquier otro módulo del backend |
-| `demo.ts` | `src/tools/oc.ts` | `app`, `runtime`, `llm` |
+| `demo.ts` | `src/tools/oc.ts` | `app`, `agente`, `llm` |
 
 `src/server.ts` es la **raíz de composición**: crea el adaptador Anthropic, el almacén de sesiones y la app, y los inyecta. Así los tests usan un LLM falso sin tocar código de producción.
 
@@ -134,14 +136,14 @@ Navegador ──HTTPS──▶ Railway (1 servicio Node 22)
 ```
 Analista   Front    POST /api/chat   loop            LLM                  Herramientas
   │"Procesa sol-004…" │                │               │                      │
-  │────────▶│────────▶│──runTurn──────▶│──enviar──────▶│                      │
+  │────────▶│────────▶│──ejecutarTurno──────▶│──enviar──────▶│                      │
   │         │         │                │◀─tool_use oc_leer_paquete────────────▶ paquete
   │         │         │                │◀─tool_use oc_validar─────────────────▶ apta, RC5
   │         │         │                │   gate: pendiente = sol-004           │
   │         │         │                │◀─tool_use oc_construir_payload, oc_generar_evidencia
   │         │         │                │◀─texto: tabla + "¿Confirmas?"          │
   │         │◀─{reply, toolCalls, needsConfirmation: true}                      │
-  │"Confirmo"│───────▶│──runTurn──────▶│ gate: otorgada = sol-004              │
+  │"Confirmo"│───────▶│──ejecutarTurno──────▶│ gate: otorgada = sol-004              │
   │         │         │                │◀─tool_use oc_crear(confirmado=true)    │
   │         │         │                │   gate OK ───────────────────────────▶ 4500000002
   │         │◀─{reply: número OC + ruta evidencia, needsConfirmation: false}    │
@@ -204,7 +206,7 @@ reto-03-beltran/
 ├── fixtures/reto-03/                [PRD] copia intacta
 ├── documentacion/PRD.md · documentacion/PLAN.md · documentacion/uso-ia.md   + trazabilidad del proceso
 ├── documentacion/decisiones/0001…0005-*.md          + decisiones de arquitectura (ADR)
-├── .github/pull_request_template.md + plantilla de PR (inglés)
+├── .github/pull_request_template.md + plantilla de PR (español)
 ├── modulo/                          [PRD §9.4] bonus
 ├── out/                             [PRD] generado (ignorado en git)
 ├── demo.ts                          [PRD]
@@ -226,9 +228,8 @@ Principio: **todo lo que pueda generar una herramienta oficial se genera por com
 # 1. Repositorio y paquete raíz
 mkdir reto-03-beltran && cd reto-03-beltran
 git init -b main
-test "$(gh api user -q .login)" = JSBeltran93 || echo "ALTO: gh no está en JSBeltran93"   # ver §20
 git config user.name "<nombre>"              # identidad SOLO de este repo
-git config user.email "60237802+JSBeltran93@users.noreply.github.com"
+git config user.email "<correo noreply de GitHub>"
 git config commit.template .gitmessage
 npm init -y
 npm pkg set type=module engines.node=">=20" private=true
@@ -256,10 +257,10 @@ npm uninstall -w web oxlint                                      # se reemplaza 
 rm -rf web/src/assets web/src/App.css web/public/*.svg           # contenido de demostración de la plantilla
 
 # 5. Insumos del reto (fixtures intactos y documentación)
-mkdir -p fixtures docs agent src/{runtime,llm,tools/oc,sap,shared,knowledge} pruebas/{fakes,tools/oc,sap,runtime} modulo
+mkdir -p fixtures docs agent src/{agente,llm,tools/oc,sap,shared,knowledge} pruebas/{dobles,tools/oc,sap,runtime} modulo
 cp -r "../retos-ia-periferia-it-group/Retos IA Periferia IT Group/reto-03/fixtures/reto-03" fixtures/
 chmod -R u+w fixtures      # las carpetas originales vienen de solo lectura (dr-xr-xr-x)
-cp "../retos-ia-periferia-it-group/Retos IA Periferia IT Group/reto-03/PRD.md" documentacion/PRD.md
+cp "../retos-ia-periferia-it-group/Retos IA Periferia IT Group/documentacion/PRD.md" documentacion/PRD.md
 cp ../PLAN-RETO-03.md documentacion/PLAN.md
 
 # 6. Scripts (sin editar package.json a mano)
@@ -301,7 +302,6 @@ git switch develop && git merge --no-ff chore/scaffold
 # 8. Repositorio remoto (privado), rama por defecto develop y despliegue
 gh repo create reto-03-beltran --private --source . --remote origin \
   --description "Agente conversacional de órdenes de compra SAP (Reto 03, Periferia IT Group)"   # se crea en la cuenta activa
-git remote set-url origin https://github.com/JSBeltran93/reto-03-beltran.git   # HTTPS: usa la cuenta personal vía gh, no la llave SSH del trabajo
 git push -u origin main develop
 gh repo edit --default-branch develop      # quien abra el repo ve develop
 # Railway: conectar el repo y desplegar desde la rama develop; build "npm ci && npm run build", start "npm start",
@@ -349,10 +349,10 @@ El historial es parte de la evaluación (PRD §9.5: "repositorio Git con histori
 |---|---|
 | `main` | Solo el commit inicial vacío. Recibe el trabajo al final mediante un PR documentado desde `develop` (no se commitea directo). |
 | `develop` | Rama de integración y rama por defecto del repo. Railway despliega desde aquí. |
-| `chore/scaffold`, `feature/oc-package`, `feature/oc-rules`, `feature/oc-order`, `feature/runtime`, `feature/web-chat`, `documentacion/solution` | Una por bloque del cronograma (§18). Se integran a `develop` con `git merge --no-ff` para que cada bloque quede visible en el historial, y se hace `git push` después de cada merge. |
+| `chore/scaffold`, `feature/oc-package`, `feature/oc-rules`, `feature/oc-order`, `feature/agent-runtime`, `feature/web-chat`, `docs/solution` | Una por bloque del cronograma (§18). Se integran a `develop` con `git merge --no-ff` para que cada bloque quede visible en el historial, y se hace `git push` después de cada merge. |
 
 #### 4.1.3 Convención de commits (Conventional Commits, inglés)
-- Formato: `type(scope): subject` en imperativo, ≤ 72 caracteres, sin punto final. Tipos: `feat`, `fix`, `test`, `docs`, `refactor`, `chore`, `ci`, `build`. Scopes: `oc`, `sap`, `llm`, `runtime`, `api`, `web`, `agent`, `docs`.
+- Formato: `type(scope): subject` en imperativo, ≤ 72 caracteres, sin punto final. Tipos: `feat`, `fix`, `test`, `docs`, `refactor`, `chore`, `ci`, `build`. Scopes: `oc`, `sap`, `llm`, `agente`, `api`, `web`, `agent`, `docs`.
 - Cuerpo (ajustado a 72 columnas): qué cambia y **por qué**; referencia al PRD cuando aplique (`Refs: PRD §7.3 RC5`).
 - Atómicos: un cambio lógico por commit; los tests van en el mismo commit que el código que prueban; la documentación general en commits `docs` propios.
 - Los commits hechos con ayuda de un asistente de IA llevan la línea `Co-Authored-By` correspondiente; es coherente con la declaración de uso de IA que exige el PRD (SOLUCION §11).
@@ -374,9 +374,9 @@ El historial es parte de la evaluación (PRD §9.5: "repositorio Git con histori
 | `feature/oc-package` | `feat(oc): add domain schemas, result type and error catalog` · `feat(oc): parse quotation, invoice and amounts` · `feat(oc): add oc_leer_paquete tool` |
 | `feature/oc-rules` | `feat(oc): implement control rules RC1-RC10` · `feat(oc): add oc_validar tool and control log` |
 | `feature/oc-order` | `feat(oc): build purchase order payload with traceability` · `feat(oc): generate approval evidence with sha256` · `feat(sap): add SapAdapter port and file-based mock` · `feat(oc): add oc_crear with idempotency and integrity check` · `feat: add tool-only demo script` |
-| `feature/runtime` | `feat(llm): add LLM port and Anthropic adapter` · `feat(runtime): add agent loop with iteration and token budgets` · `feat(runtime): enforce human confirmation gate` · `feat(agent): add system prompt and process knowledge` · `feat(api): add chat and session endpoints` |
+| `feature/agent-runtime` | `feat(llm): add LLM port and Anthropic adapter` · `feat(agente): add agent loop with iteration and token budgets` · `feat(agente): enforce human confirmation gate` · `feat(agent): add system prompt and process knowledge` · `feat(api): add chat and session endpoints` |
 | `feature/web-chat` | `feat(web): add chat state and API client` · `feat(web): add message list and tool call cards` · `feat(web): add confirmation banner and composer` |
-| `documentacion/solution` | `docs: add SOLUCION.md` · `docs: add README with setup, demo and API` · `docs: add architecture decision records` · `ci: add GitHub Actions workflow` |
+| `docs/solution` | `docs: add SOLUCION.md` · `docs: add README with setup, demo and API` · `docs: add architecture decision records` · `ci: add GitHub Actions workflow` |
 
 #### 4.1.5 Cierre
 ```bash
@@ -549,9 +549,9 @@ El CI no necesita la clave de Anthropic: los tests usan el LLM falso y la demo n
 
 | Área | Práctica | Cómo se aplica en este proyecto | Quién la hace cumplir |
 |---|---|---|---|
-| Arquitectura | **SRP**: una responsabilidad por módulo | Un archivo por responsabilidad (`parsers`, `reglas`, `payload`, `loop`, `confirmation-gate`…) | Revisión + `max-lines-per-function` |
+| Arquitectura | **SRP**: una responsabilidad por módulo | Un archivo por responsabilidad (`extractores`, `reglas`, `payload`, `ciclo`, `confirmacion`…) | Revisión + `max-lines-per-function` |
 | Arquitectura | **OCP**: agregar reglas sin modificar el motor | `REGLAS` es un arreglo; RC nueva = objeto nuevo | Guía en `CONTRIBUTING.md` |
-| Arquitectura | **LSP / DIP**: depender de interfaces | `LlmAdapter` y `SapAdapter`; `server.ts` como raíz de composición; tests con el LLM falso | Tabla de dependencias §2.3 + tests |
+| Arquitectura | **LSP / DIP**: depender de interfaces | `AdaptadorLlm` y `SapAdapter`; `server.ts` como raíz de composición; tests con el LLM falso | Tabla de dependencias §2.3 + tests |
 | Arquitectura | **ISP**: interfaces pequeñas | Puertos con 1 a 3 métodos | Revisión |
 | Clean code | Funciones cortas y simples | ≤ 40 líneas, complejidad ≤ 10, ≤ 4 parámetros (si no, objeto de opciones), anidación ≤ 3 | ESLint (`max-*`, `complexity`) |
 | Clean code | Sin números mágicos | Constantes con nombre: `TOLERANCIA_COTIZACION = 0.02`, `MAX_DESCRIPCION_SAP = 40`, `BASE_NUMERO_OC = 4500000000`, `TOLERANCIA_TOTAL = 1` | Revisión |
@@ -559,7 +559,7 @@ El CI no necesita la clave de Anthropic: los tests usan el LLM falso y la demo n
 | Clean code | Retornos tempranos | Validar y salir; evita anidación | `max-depth` |
 | Tipos | Sin `any`, validación en los bordes | `unknown` + zod en todo lo que entra (archivos, HTTP, args del LLM); tipos inferidos de esquemas | `no-explicit-any`, `no-unsafe-*` |
 | Tipos | Exhaustividad | `switch` sobre uniones con verificación exhaustiva (`resultado`, `fin` del LLM) | `switch-exhaustiveness-check` |
-| Errores | Errores como valores | `Result<T>` y catálogo de códigos (§7.4); las herramientas nunca lanzan; nada de `catch` vacío | Tests de contrato + revisión |
+| Errores | Errores como valores | `Resultado<T>` y catálogo de códigos (§7.4); las herramientas nunca lanzan; nada de `catch` vacío | Tests de contrato + revisión |
 | Errores | UI resiliente | Estados de carga, vacío y error en el front; reintento | Tests de componentes |
 | Seguridad | Secretos fuera del código | Clave solo en `.env`/Railway; config validada con zod; logs sin claves | `.gitignore`, revisión, búsqueda antes de entregar |
 | Seguridad | Entrada no confiable | Límite de tamaño del body, validación zod, `caso` contra lista blanca, sin `eval` ni shell, markdown sin HTML crudo, cabeceras de seguridad | Tests de API + ESLint (`no-implied-eval`) |
@@ -571,7 +571,7 @@ El CI no necesita la clave de Anthropic: los tests usan el LLM falso y la demo n
 | Front | Reglas de React | Hooks correctos; estado en reducer puro | `react-hooks` |
 | Observabilidad | Logs estructurados | JSON con `sessionId`, herramienta, duración y resultado; `out/log.jsonl` | Revisión |
 | Configuración | 12-factor | Toda la configuración por variables de entorno validadas | `configuracion.ts` + test |
-| Documentación | Código autoexplicativo | TSDoc en inglés en todo lo exportado; ADR por decisión; `CONTRIBUTING.md` | Revisión + PR template |
+| Documentación | Código autoexplicativo | JSDoc en español en todo lo exportado; ADR por decisión; `CONTRIBUTING.md` | Revisión + PR template |
 | Git | Historial limpio y trazable | Ramas por bloque, `--no-ff`, Conventional Commits | `commitlint`, hooks |
 
 ---
@@ -609,7 +609,7 @@ Quality rules and their enforcement: documentacion/PLAN.md §4.2-4.3.
 - out/control.csv: solicitud_id,resultado,numero_oc,retroactiva,bloqueos,confirmaciones,ts.
 - fixtures/ es de solo lectura; todo lo generado va a out/.
 
-## Language
+## Idioma
 - Technical folders/files: English. Domain names (tools, types, fields, port methods, error codes): Spanish, as the PRD contracts.
 - Code documentation (comments, TSDoc on functions/types/modules), test names and commit messages: English.
 - User-facing text (agent replies, error messages, UI), agent/prompt.md, src/knowledge/, tool descriptions
@@ -620,16 +620,16 @@ Quality rules and their enforcement: documentacion/PLAN.md §4.2-4.3.
 ## Código
 - TypeScript strict + noUncheckedIndexedAccess. Prohibido any (unknown + zod).
 - Funciones cortas (~25 líneas), una responsabilidad.
-- Errores de dominio como valores: Result<T>; códigos del catálogo documentacion/PLAN.md §7.4.
+- Errores de dominio como valores: Resultado<T>; códigos del catálogo documentacion/PLAN.md §7.4.
 - Reloj inyectable (src/comun/reloj.ts); fechas comparadas por día calendario.
-- Montos solo vía parsers.ts. Rutas solo desde ctx.directory; caso validado contra carpetas existentes.
+- Montos solo vía extractores.ts. Rutas solo desde ctx.directory; caso validado contra carpetas existentes.
 - Sin shell ni eval en herramientas. Logs solo con el logger inyectado; nunca la API key.
 - Proyecto creado con comandos (create-vite, npm pkg set, tsc --init): no reescribir a mano lo generado.
 - No agregar dependencias sin justificarlas en SOLUCION.md §8.
 
 ## Front
 - Tailwind v4; tokens en @theme de web/src/estilos.css; modo oscuro con dark:.
-- Estado en useChat (reducer puro); componentes presentacionales.
+- Estado en useConversacion (reducer puro); componentes presentacionales.
 - Accesibilidad: aria-live en el historial, foco visible, contraste AA, labels.
 - Markdown con react-markdown + remark-gfm; nunca dangerouslySetInnerHTML.
 
@@ -646,7 +646,7 @@ Quality rules and their enforcement: documentacion/PLAN.md §4.2-4.3.
 - oc_crear re-valida desde fixtures y compara el payload; el ciclo bloquea la autoconfirmación.
 
 ## Git
-Never commit to main. Work on one branch per plan block (chore/scaffold, feature/*, documentacion/solution), merge into develop with --no-ff and push.
+Never commit to main. Work on one branch per plan block (chore/scaffold, feature/*, docs/solution), merge into develop with --no-ff and push.
 Conventional Commits in English, atomic, imperative subject <= 72 chars, body with the why (documentacion/PLAN.md §4.1).
 Never commit .env, out/, node_modules/, web/dist/, coverage/.
 
@@ -654,7 +654,7 @@ Never commit .env, out/, node_modules/, web/dist/, coverage/.
 Anotar en documentacion/uso-ia.md: tarea, qué se aceptó, qué se descartó y por qué (SOLUCION.md §11).
 
 ## Si el tiempo aprieta
-Recortar: CI → bonus modulo/ → tests de Composer/App → PDF (P1) → pulido visual.
+Recortar: CI → bonus modulo/ → tests de Compositor/App → PDF (P1) → pulido visual.
 Nunca: 5 herramientas P0, CA1–CA5, demo.ts, tests de reglas y matriz, chat con tool calls y
 confirmación, URL pública, SOLUCION.md.
 ```
@@ -700,7 +700,7 @@ Mapeo de adjuntos (de `nota_fixture`): `solicitud.xlsx → solicitud.json`, `cot
 
 | Tipo | Forma |
 |---|---|
-| `Result<T>` | `{ok:true, data:T}` \| `{ok:false, error:{codigo, mensaje, accion_sugerida?}}` |
+| `Resultado<T>` | `{ok:true, data:T}` \| `{ok:false, error:{codigo, mensaje, accion_sugerida?}}` |
 | `Hallazgo` | `{regla: "RC1".."RC10", tipo: "bloqueo"\|"confirmacion"\|"derivado", detalle, valores?, accion_sugerida?}` |
 | `Validacion` | `{apta, bloqueos, confirmaciones, derivados: {indicador_iva?, condiciones_pago?, proveedor?}, retroactiva}` |
 | `Trazabilidad` | `Record<campo, {fuente: "solicitud"\|"cotizacion"\|"correo"\|"aprobacion"\|"maestro.<nombre>"\|"derivado", detalle?}>` |
@@ -711,6 +711,7 @@ Mapeo de adjuntos (de `nota_fixture`): `solicitud.xlsx → solicitud.json`, `cot
 | Código | Cuándo | Mensaje / acción |
 |---|---|---|
 | `CASO_INEXISTENTE` | `caso` fuera de los existentes | Lista los casos válidos |
+| `PAQUETE_INCOMPLETO` | Falta el correo o la solicitud del caso | Pedir al solicitante reenviar el correo con la solicitud |
 | `JSON_INVALIDO` | JSON no parsea o no cumple esquema | Archivo afectado; pedir reenvío al solicitante |
 | `MONTO_INVALIDO` | Monto no numérico | Campo afectado; pedir corrección |
 | `ARGS_INVALIDOS` | Args no cumplen zod | Detalle para que el modelo corrija |
@@ -742,7 +743,7 @@ Mapeo de adjuntos (de `nota_fixture`): `solicitud.xlsx → solicitud.json`, `cot
 | `excepciones[]` | Una por confirmación; `confirmado_por` se completa al crear | derivado |
 
 [Supuesto] `precio_unitario` se toma tal cual de la solicitud (IVA incluido); la conversión a neto que exige SAP real va en el diseño del adaptador real (SOLUCION §6).
-[Supuesto] `confirmado_por` = `"usuario-chat:<sessionId>"` en el chat y `"demo"` en `demo.ts` (sin autenticación, PRD §3.2).
+[Supuesto] `confirmado_por` = `"sesion:<sessionId>"` en el chat y `"demo"` en `demo.ts` (sin autenticación, PRD §3.2).
 
 ---
 
@@ -751,10 +752,10 @@ Mapeo de adjuntos (de `nota_fixture`): `solicitud.xlsx → solicitud.json`, `cot
 | Archivo | Funciones (entrada → salida) |
 |---|---|
 | `fixtures.ts` · `paquete.ts` | `listarCasos(dir)` · `resolverCaso(dir, caso) → Result<ArchivosCaso>` · `leerMaestros(dir) → Result<Maestros>` (cacheado) · `leerPaquete(archivos) → Result<Paquete>` |
-| `parsers.ts` | `extraerMonto("COP 11.400.000") → {moneda, valor}` · `normalizarNit("900.555.111-2") → "900555111"` · `extraerCotizacion(texto)` · `extraerFactura(texto)` · `addDays(fecha, dias)` |
+| `extractores.ts` | `extraerMonto("COP 11.400.000") → {moneda, valor}` · `normalizarNit("900.555.111-2") → "900555111"` · `extraerCotizacion(texto)` · `extraerFactura(texto)` · `sumarDias(fecha, dias)` |
 | `normalizar.ts` | `normalizarNombre("TecnoSuministros S.A.S.") → "tecnosuministros"` · `sinTildes` · `fechaCalendario(iso) → "YYYY-MM-DD"` · `contieneAprobado(texto)` |
 | `reglas.ts` | `REGLAS: Regla[]` · `validarPaquete(paquete, maestros) → Validacion` · `buscarCandidatos(solicitud, maestros)` |
-| `payload.ts` | `construirOrden(paquete, validacion, maestros, sha) → Result<{orden, trazabilidad}>` · `truncarDescripcion(texto, 40)` · `derivarUnidad(texto)` · `fingerprint(orden)` |
+| `payload.ts` | `construirOrden(paquete, validacion, maestros, sha) → Result<{orden, trazabilidad}>` · `truncarDescripcion(texto, 40)` · `derivarUnidad(texto)` · `huella(orden)` |
 | `evidencia.ts` | `textoEvidencia(aprobacion) → string` · `hashEvidenciaCaso(texto) → sha256` · `generarEvidencia(dir, caso)` · `escribirPdf(...)` (P1) |
 | `registro-control.ts` | `registrarControl(dir, fila)` (encabezado si no existe; escapa comas y comillas) |
 
@@ -778,7 +779,7 @@ Mapeo de adjuntos (de `nota_fixture`): `solicitud.xlsx → solicitud.json`, `cot
 | `validar` → `oc_validar` | `caso`, `paquete` | Re-lee el paquete desde fixtures (fuente de verdad; si el recibido difiere, agrega aviso) → `validarPaquete` → si `apta=false`, fila `bloqueada` en control | `Validacion` |
 | `construir_payload` → `oc_construir_payload` | `caso`, `paquete`, `derivados` | `hashEvidenciaCaso(textoEvidencia(...))` → `construirOrden` → zod → escribe `out/<caso>/trazabilidad.json` | `{orden, ruta_trazabilidad}` |
 | `generar_evidencia` → `oc_generar_evidencia` | `caso` | Escribe `out/<caso>/aprobacion.txt` (+ `.pdf` P1) leyendo `aprobacion.json` | `{ruta, sha256}` |
-| `crear` → `oc_crear` | `caso`, `payload`, `confirmado?` | 1) Si existe OC para `solicitud_id` → `idempotente: true`, fila `idempotente`. 2) Re-valida → si no apta: `NO_APTA`. 3) Confirmaciones sin `confirmado` → `REQUIERE_CONFIRMACION`, fila `pendiente`. 4) `fingerprint(payload) ≠ fingerprint(reconstruida)` → `PAYLOAD_ALTERADO`. 5) Completa `confirmado_por` → `crearOrden` → fila `creada` | `{numero_oc, fecha, idempotente}` |
+| `crear` → `oc_crear` | `caso`, `payload`, `confirmado?` | 1) Si existe OC para `solicitud_id` → `idempotente: true`, fila `idempotente`. 2) Re-valida → si no apta: `NO_APTA`. 3) Confirmaciones sin `confirmado` → `REQUIERE_CONFIRMACION`, fila `pendiente`. 4) `huella(payload) ≠ huella(reconstruida)` → `PAYLOAD_ALTERADO`. 5) Completa `confirmado_por` → `crearOrden` → fila `creada` | `{numero_oc, fecha, idempotente}` |
 
 - El hash de la evidencia se calcula con la misma función en `construir_payload` y `generar_evidencia`. Así el orden del PRD (payload antes que evidencia) no deja `evidencia_sha256` vacío.
 - [Supuesto] "Cada intento" en `control.csv` [HU-5]: `oc_crear` registra creada, idempotente y pendiente; `oc_validar` registra bloqueada, porque un caso bloqueado (p. ej. sol-002, sin `codigo_sap`) no puede construir un payload válido.
@@ -825,7 +826,7 @@ Verificado en los fixtures: RC4, RC9 y RC10 se cumplen en los 6 casos (por eso s
 ## 11. Runtime del agente [PRD §6.1, §6.3]
 
 ### 11.1 Sesiones (`src/agente/sesiones.ts`)
-`Session = {id, modelMessages, visibleHistory, tokensUsed, pendiente: {caso, reglas} | null, otorgada: string | null, createdAt}`. Las entradas visibles son de tipo usuario, asistente, herramienta `{nombre, args, ok, resumen}` o error. Se guardan en un `Map` en memoria; un `sessionId` desconocido crea una sesión nueva; máximo `MAX_SESIONES` (se descarta la más antigua).
+`Sesion = {id, mensajes, historial, tokensUsados, pendiente: {caso, reglas} | null, otorgada: string | null}`. Las entradas visibles son de tipo usuario, asistente, herramienta `{nombre, args, ok, resumen}` o error. Se guardan en un `Map` en memoria; un `sessionId` desconocido crea una sesión nueva; máximo `MAX_SESIONES` (se descarta la más antigua).
 
 ### 11.2 Ciclo (`src/agente/ciclo.ts`): `ejecutarTurno(deps, sessionId, mensaje)`
 1. `alMensajeUsuario`: si hay `pendiente` y el mensaje es afirmativo → `otorgada = pendiente.caso`; si es negativo → limpia `pendiente`.
@@ -833,8 +834,8 @@ Verificado en los fixtures: RC4, RC9 y RC10 se cumplen en los 6 casos (por eso s
 3. Hasta `MAX_ITERACIONES` vueltas:
    - `llm.enviar(mensajes, herramientas)` → suma el uso de tokens.
    - Sin llamadas a herramientas → fin del turno.
-   - Por cada llamada: `authorize` → `ejecutarLlamada` (zod + `execute`) → `audit-log` → historial visible. Todos los resultados vuelven en un solo mensaje.
-   - Después de `oc_validar` con confirmaciones → `pendiente = {caso, reglas}`. Después de `oc_crear` exitoso → limpia `pendiente` y `otorgada`.
+   - Por cada llamada: `autorizar` → `ejecutarLlamada` (zod + `execute`) → `audit-log` → historial visible. Todos los resultados vuelven en un solo mensaje.
+   - Después de `oc_construir_payload` → `pendiente = caso`. Después de `oc_crear` exitoso → limpia `pendiente` y `otorgada`.
 4. Si se llega al tope → una llamada final sin herramientas con lo hecho y lo pendiente (CA1).
 5. Devuelve `{reply, toolCalls del turno, needsConfirmation: pendiente ≠ null}`.
 6. Errores del adaptador → `reply` con el mensaje del catálogo; la sesión sigue (CA5).
@@ -842,7 +843,7 @@ Verificado en los fixtures: RC4, RC9 y RC10 se cumplen en los 6 casos (por eso s
 ### 11.3 Compuerta (`src/agente/confirmacion.ts`) — CA3
 - **Afirmativo:** el texto normalizado empieza con `si`, `confirmo`, `confirmado`, `apruebo`, `procede`, `adelante`, `ok` o `dale`, o contiene "confirmo".
 - **Negativo:** contiene `no`, `cancela`, `cancelar` o `rechazo`.
-- `authorize`: `oc_crear` con `confirmado=true` y `otorgada ≠ caso` → `CONFIRMACION_NO_OTORGADA` como resultado de la herramienta. La herramienta conserva su contrato; `demo.ts` la llama directo.
+- `autorizar`: `oc_crear` con `confirmado=true` y `otorgada ≠ caso` → `CONFIRMACION_NO_OTORGADA` como resultado de la herramienta. La herramienta conserva su contrato; `demo.ts` la llama directo.
 
 ### 11.4 Registro de herramientas (`src/agente/registro-herramientas.ts`)
 Catálogo `oc_<export>`; esquema para el LLM `{name, description, input_schema: z.toJSONSchema(z.object(args))}`; `safeParse` antes de ejecutar (`ARGS_INVALIDOS` si falla); mide duración; arma un resumen corto (p. ej. "apta · 1 confirmación (RC5)").
@@ -851,7 +852,7 @@ Catálogo `oc_<export>`; esquema para el LLM `{name, description, input_schema: 
 Una línea JSON por llamada en `out/log.jsonl`: `{ts, sessionId, herramienta, args, ok, resumen, duracion_ms}`. Nunca claves ni cabeceras.
 
 ### 11.6 Puerto y adaptador LLM
-- `src/llm/adapter.ts`: `interface LlmAdapter { enviar(mensajes, herramientas): Promise<RespuestaLlm> }`, con `RespuestaLlm = {texto, llamadas: {id, nombre, args}[], uso: {entrada, salida}, fin: "final"|"herramientas"|"limite"|"rechazo"}`. Tipos neutrales: el ciclo no conoce el SDK.
+- `src/llm/adapter.ts`: `interface AdaptadorLlm { enviar(mensajes, herramientas): Promise<RespuestaLlm> }`, con `RespuestaLlm = {texto, llamadas: {id, nombre, args}[], uso: {entrada, salida}, fin: "final"|"herramientas"|"limite"|"rechazo"}`. Tipos neutrales: el ciclo no conoce el SDK.
 - `src/llm/anthropic.ts`: `messages.create` con `model` de env, `max_tokens: 16000`, `output_config: {effort: "low"}`, `tool_choice: {type: "auto"}`, `cache_control` en el system prompt y en la última herramienta, `timeout: LLM_TIMEOUT_MS` (ms), `maxRetries: 2`. Revisa `stop_reason` (`tool_use`, `end_turn`, `max_tokens`, `refusal`) antes de leer el contenido. Errores tipados del SDK (timeout, rate limit, API) → códigos `LLM_*`. Respaldo automático ante rechazos (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`) si la versión instalada del SDK lo soporta; si no, se documenta como mejora.
 - `pruebas/dobles/llm-falso.ts`: implementa el puerto con respuestas guionizadas y registra lo recibido.
 
@@ -899,22 +900,22 @@ Modo oscuro con la variante `dark:`; contraste AA en ambos temas; `rounded-xl` y
 
 | Requisito [PRD §6.1] | Componente | Detalle |
 |---|---|---|
-| Historial | `MessageList`, `MessageBubble` | `role="log"`, `aria-live="polite"`, desplaza al final; markdown con tablas |
-| Campo de entrada | `Composer` | `textarea` con label; Enter envía, Shift+Enter salto de línea; deshabilitado mientras carga |
-| Indicador "pensando" | `ThinkingIndicator` | Respeta `prefers-reduced-motion` |
-| Cada tool call (nombre, args, resultado) | `ToolCallCard` | Nombre, ✓/✕, resumen; `<details>` con args y resultado |
-| Confirmación resaltada | `ConfirmationBanner` | Tarjeta ámbar `role="alert"`; botones "Confirmo"/"Cancelar" que envían ese texto como mensaje normal |
-| Errores claros (CA5) | `ErrorNotice` | Mensaje y "Reintentar" |
-| — (UX) | `Header` | Título, salud (`/api/health`), "Nueva sesión" |
-| — (UX) | `EmptyState` | 3 prompts sugeridos: sol-001, PRD §11 (sol-004), sol-002 |
+| Historial | `ListaMensajes`, `BurbujaMensaje` | `role="log"`, `aria-live="polite"`, desplaza al final; markdown con tablas |
+| Campo de entrada | `Compositor` | `textarea` con label; Enter envía, Shift+Enter salto de línea; deshabilitado mientras carga |
+| Indicador "pensando" | `IndicadorPensando` | Respeta `prefers-reduced-motion` |
+| Cada tool call (nombre, args, resultado) | `TarjetaHerramienta` | Nombre, ✓/✕, resumen; `<details>` con args y resultado |
+| Confirmación resaltada | `BannerConfirmacion` | Tarjeta ámbar `role="alert"`; botones "Confirmo"/"Cancelar" que envían ese texto como mensaje normal |
+| Errores claros (CA5) | `AvisoError` | Mensaje y "Reintentar" |
+| — (UX) | `Encabezado` | Título, salud (`/api/health`), "Nueva sesión" |
+| — (UX) | `EstadoVacio` | 3 prompts sugeridos: sol-001, PRD §11 (sol-004), sol-002 |
 
 ### 13.3 Estado
-- `state/chatReducer.ts` (puro): estado `{sessionId, entries, loading, error, needsConfirmation, lastMessage}`; acciones `SEND`, `RESPONSE_OK`, `RESPONSE_ERROR`, `NEW_SESSION`.
-- `state/useChat.ts`: `sessionId` con `crypto.randomUUID()` en `localStorage` (con try/catch); `send`, `retry`, `newSession`.
-- `api/client.ts`: `sendMessage`, `getHealth`; valida respuestas con `@contratos`.
+- `estado/conversacion.ts` (puro): estado `{sessionId, entries, loading, error, needsConfirmation, lastMessage}`; acciones `SEND`, `RESPONSE_OK`, `RESPONSE_ERROR`, `NEW_SESSION`.
+- `estado/useConversacion.ts`: `sessionId` con `crypto.randomUUID()` en `localStorage` (con try/catch); `send`, `retry`, `newSession`.
+- `api/cliente.ts`: `sendMessage`, `getHealth`; valida respuestas con `@contratos`.
 
 ### 13.4 Layout
-Una columna `max-w-3xl` centrada; márgenes de 16 px en móvil; `Composer` fijo abajo; tablas con scroll horizontal propio; foco al `textarea` después de cada respuesta.
+Una columna `max-w-3xl` centrada; márgenes de 16 px en móvil; `Compositor` fijo abajo; tablas con scroll horizontal propio; foco al `textarea` después de cada respuesta.
 
 ---
 
@@ -926,28 +927,28 @@ Principios: mayoría unitarias del dominio; tablas con `it.each`; deterministas 
 
 | Archivo | Qué prueba |
 |---|---|
-| `tools/oc/parsers.test.ts` | Montos válidos e inválidos; NIT con y sin DV; las 6 cotizaciones (ref, NIT, total, validez); factura de sol-005 |
+| `tools/oc/extractores.test.ts` | Montos válidos e inválidos; NIT con y sin DV; las 6 cotizaciones (ref, NIT, total, validez); factura de sol-005 |
 | `tools/oc/normalizar.test.ts` | Nombres con S.A.S./Ltda./S.A.; "Aprobado." y "aprobado por 25 millones" → sí; "desaprobado", "no aprobado" → no; fechas con `-05:00` |
 | `tools/oc/reglas.test.ts` | Cada RC pasa y falla (sintéticos RC4, RC9, RC10); RC5 en el límite de 2 %; RC3 con aprobador fuera del centro |
 | `tools/oc/payload.test.ts` | Truncado a 40; unidad; orden válida con zod; trazabilidad completa; derivados de sol-006 |
 | `tools/oc/evidencia.test.ts` | Encabezados; hash estable e igual al del payload |
-| `tools/oc/control.test.ts` | Encabezado exacto; escape de comas y comillas |
+| `tools/oc/validar.test.ts` | Matriz por caso, fila de control y aviso si el paquete fue alterado |
 | `sap/mock.test.ts` | Secuencia desde 4500000001; búsqueda por referencia; persistencia |
-| `tools/oc.test.ts` | Contrato: siempre string JSON, nunca lanza; idempotencia; `NO_APTA`; `REQUIERE_CONFIRMACION`; `PAYLOAD_ALTERADO` |
+| `tools/oc/crear.test.ts` y `tools/oc/leer-paquete.test.ts` | Contrato: siempre string JSON, nunca lanza; idempotencia; `NO_APTA`; `REQUIERE_CONFIRMACION`; `PAYLOAD_ALTERADO` |
 | `matriz-resultados.test.ts` | Los 6 casos de punta a punta = tabla §10.2 |
-| `agente/confirmation-gate.test.ts` | Afirmativos y negativos; bloqueo de autoconfirmación |
+| `agente/confirmacion.test.ts` | Afirmativos y negativos; bloqueo de autoconfirmación |
 | `agente/loop.test.ts` (fake LLM) | CA1 tope; CA3 autoconfirmación bloqueada; CA5 error del adaptador; args inválidos vuelven al modelo; presupuesto agotado |
-| `app.test.ts` (supertest + fake LLM) | `/api/health` sin claves; 400 con cuerpo inválido; sol-004 en dos turnos; `/api/sessions/:id` 404 y 200 |
+| `server.test.ts` (supertest + LLM falso) | `/api/health` sin claves; 400 con cuerpo inválido; sol-004 en dos turnos; `/api/sessions/:id` 404 y 200 |
 
 ### 14.2 Front (`web/src/**/*.test.tsx`, junto a cada componente)
 
 | Archivo | Qué prueba |
 |---|---|
-| `state/chatReducer.test.ts` | Transiciones; `needsConfirmation` |
-| `components/ToolCallCard.test.tsx` | Nombre, estado y resumen; args al expandir |
-| `components/ConfirmationBanner.test.tsx` | Visible solo si corresponde; "Confirmo" llama `onConfirm` |
-| `components/Composer.test.tsx` | Enter envía; Shift+Enter no; deshabilitado al cargar; label accesible |
-| `Aplicacion.test.tsx` | Con `fetch` simulado: mensaje, tool calls y banner visibles; error de red → `ErrorNotice` |
+| `state/conversacion.test.ts` | Transiciones; `needsConfirmation` |
+| `componentes/TarjetaHerramienta.test.tsx` | Nombre, estado y resumen; args al expandir |
+| `componentes/BannerConfirmacion.test.tsx` | Visible solo si corresponde; "Confirmo" llama `onConfirm` |
+| `componentes/Compositor.test.tsx` | Enter envía; Shift+Enter no; deshabilitado al cargar; label accesible |
+| `Aplicacion.test.tsx` | Con `fetch` simulado: mensaje, tool calls y banner visibles; error de red → `AvisoError` |
 
 ### 14.3 Cobertura
 `npm run test:cov`: ≥ 85 % de líneas en `src/tools/oc`. El CI corre typecheck, lint, test y demo.
@@ -1008,7 +1009,7 @@ Railway desde el minuto 15; probado al final con el prompt del PRD §11 en incó
 - `modulo/agent.md`: frontmatter `description`, `mode: primary`, `permission: {edit: deny, bash: deny}`; cuerpo = `agent/prompt.md`.
 - `modulo/tools/oc.ts`: re-exporta `src/tools/oc.ts`.
 - `modulo/skill/ordenes-compra/SKILL.md`: frontmatter `name`, `description`; cuerpo = `src/knowledge/ordenes-compra.md`.
-- Script `npm run build:modulo` que genera los `.md` desde las fuentes, y un test que verifica que no divergen.
+- Script `copia manual verificada por `pruebas/modulo.test.ts`` que genera los `.md` desde las fuentes, y un test que verifica que no divergen.
 
 ### 17.5 Entrega [PRD §9.5]
 Repo **privado** (contiene el PRD y los fixtures de Periferia; no se publica material de la prueba), rama por defecto `develop`, historial por bloques (§4.1), tag `v1.0.0` y PR `develop → main` abierto como resumen, compartido como colaborador con la cuenta de GitHub que indique el reclutador; `reto-03-beltran.zip` con `git archive` (excluye automáticamente lo ignorado), que funciona aunque no den una cuenta; respuesta en el mismo hilo del correo con link del repo, URL pública y ZIP adjunto.
@@ -1019,17 +1020,17 @@ Repo **privado** (contiene el PRD y los fixtures de Periferia; no se publica mat
 |---|---|---|
 | `README.md` | Español | Qué es, link público, inicio rápido, variables, scripts, demo, API, estructura, enlaces a la demás documentación, badge del CI |
 | `SOLUCION.md` | Español | 12 secciones obligatorias (§17.1); enlaza los ADR |
-| `CONTRIBUTING.md` | Inglés | Setup, ramas y commits (§4.1), estándares de código, pruebas, **cómo agregar una regla de control** paso a paso, **cómo cambiar de proveedor LLM**, definición de hecho |
-| `documentacion/decisiones/0001-ports-and-adapters.md` | Inglés | Arquitectura de puertos y adaptadores |
-| `documentacion/decisiones/0002-confirmation-gate-in-loop.md` | Inglés | CA3 aplicada en el ciclo y no solo en el prompt |
-| `documentacion/decisiones/0003-server-side-revalidation.md` | Inglés | `oc_crear` re-valida y compara el payload |
-| `documentacion/decisiones/0004-tecnologias-node-express-react.md` | Inglés | Stack elegido y alternativas |
-| `documentacion/decisiones/0005-llm-model-choice.md` | Inglés | Modelo, esfuerzo, costo y cómo cambiarlo |
+| `CONTRIBUTING.md` | Español | Setup, ramas y commits (§4.1), estándares de código, pruebas, **cómo agregar una regla de control** paso a paso, **cómo cambiar de proveedor LLM**, definición de hecho |
+| `documentacion/decisiones/0001-puertos-y-adaptadores.md` | Español | Arquitectura de puertos y adaptadores |
+| `documentacion/decisiones/0002-confirmacion-en-el-ciclo.md` | Español | CA3 aplicada en el ciclo y no solo en el prompt |
+| `documentacion/decisiones/0003-revalidacion-en-servidor.md` | Español | `oc_crear` re-valida y compara el payload |
+| `documentacion/decisiones/0004-tecnologias-node-express-react.md` | Español | Stack elegido y alternativas |
+| `documentacion/decisiones/0005-eleccion-del-modelo.md` | Español | Modelo, esfuerzo, costo y cómo cambiarlo |
 | `documentacion/uso-ia.md` | Español | Bitácora de uso de IA (alimenta SOLUCION §11) |
 | `documentacion/PRD.md`, `documentacion/PLAN.md` | Español | Requisitos y plan |
-| `CLAUDE.md` | Inglés/Español | Reglas para el asistente |
-| `.github/pull_request_template.md` | Inglés | Qué cambia, cómo probar, checklist de definición de hecho |
-| TSDoc en el código | Inglés | Toda función, tipo y módulo exportado |
+| `CLAUDE.md` | Español | Reglas para el asistente |
+| `.github/pull_request_template.md` | Español | Qué cambia, cómo probar, checklist de definición de hecho |
+| JSDoc en el código | Español | Toda función, tipo y módulo exportado |
 
 Formato de cada ADR (≈ 10 líneas): *Status · Context · Decision · Consequences · Alternatives considered*. Cada ADR se escribe al cerrar el bloque donde se tomó la decisión (2 min), no al final.
 
@@ -1040,16 +1041,16 @@ Formato de cada ADR (≈ 10 líneas): *Status · Context · Decision · Conseque
 | Min | Bloque | Hecho cuando… | Commit |
 |---|---|---|---|
 | 0–15 | Comandos de §4, ajustes a mano, `CLAUDE.md`, `CONTRIBUTING.md`, `.gitmessage`, plantilla de PR, Express con `/api/health` y estáticos, push y deploy desde `develop` | URL pública con health y página; `npm test` corre | Rama `chore/scaffold` (§4.1.4) + ADR-0004 |
-| 15–30 | `comun/*`, `oc/esquemas`, `fixtures`, `parsers`, `normalizar`, `oc_leer_paquete` + tests | 6 paquetes correctos | Rama `feature/oc-package` |
+| 15–30 | `comun/*`, `oc/esquemas`, `fixtures`, `extractores`, `normalizar`, `oc_leer_paquete` + tests | 6 paquetes correctos | Rama `feature/oc-package` |
 | 30–48 | `oc/reglas`, `oc_validar`, `oc/control` + tests | Tabla §10.2 verde | Rama `feature/oc-rules` + ADR-0001 |
 | 48–63 | `payload`, `evidencia`, `sap/*`, `oc_construir_payload`, `oc_generar_evidencia`, `oc_crear`, `demo.ts` + tests | `npm run demo` = §15 | Rama `feature/oc-order` + ADR-0003 |
-| 63–80 | `llm/*`, `agente/*`, `prompt.md`, knowledge, `app.ts`, contratos + tests | sol-004 con fake LLM en tests y con el modelo real por curl | Rama `feature/runtime` + ADR-0002, ADR-0005 |
+| 63–80 | `llm/*`, `agente/*`, `prompt.md`, knowledge, `app.ts`, contratos + tests | sol-004 con fake LLM en tests y con el modelo real por curl | Rama `feature/agent-runtime` + ADR-0002, ADR-0005 |
 | 80–95 | Componentes, reducer, hook, cliente + tests | sol-004 en el navegador | Rama `feature/web-chat` |
 | 95–100 | Push de `develop` (Railway redespliega) + prueba PRD §11 | OK en incógnito | — |
-| 100–114 | `SOLUCION.md`, `README.md`, revisión de `CONTRIBUTING.md` y ADR, CI, bonus si sobra | 12 secciones; documentación enlazada | Rama `documentacion/solution` |
+| 100–114 | `SOLUCION.md`, `README.md`, revisión de `CONTRIBUTING.md` y ADR, CI, bonus si sobra | 12 secciones; documentación enlazada | Rama `docs/solution` |
 | 114–120 | typecheck, lint, test, demo; tag `v1.0.0`; PR `develop → main`; ZIP; correo | Enviado | Cierre §4.1.5 |
 
-**Recorte, en este orden:** CI → bonus → tests de `Composer` y `App` → PDF (P1) → pulido visual.
+**Recorte, en este orden:** CI → bonus → tests de `Compositor` y `App` → PDF (P1) → pulido visual.
 **Nunca se recortan:** 5 herramientas P0, CA1–CA5, `demo.ts`, tests de reglas y matriz, chat con tool calls y confirmación, URL pública, `SOLUCION.md`.
 
 ---
@@ -1091,19 +1092,8 @@ Formato de cada ADR (≈ 10 líneas): *Status · Context · Decision · Conseque
 
 ## 20. Antes de iniciar el reloj
 
-- [ ] Correo al reclutador: rúbrica (§0.1), cuenta de GitHub para dar acceso al repo privado (§17.5) y, opcional, confirmar idioma del código (§0.2).
-- [ ] Node 22, npm y `gh` instalados; sesión iniciada en GitHub (`gh auth status`) y en Railway.
-- [ ] Ensayo de los comandos de §4 en una carpeta temporal (solo el armado del proyecto, sin código de la solución) y borrarla: confirma que `create-vite`, `tsc --init` y los workspaces funcionan con las versiones actuales y evita perder minutos del reloj.
-- [x] Nombre del repositorio y del ZIP: `reto-03-beltran` (convención del PRD §9.5: `reto-03-<apellido>`). Carpeta: `/home/alternova/Documentos/periferiait/reto-03-beltran`.
-- [x] Cuenta de GitHub del reto: **personal, `JSBeltran93`** (id 60237802, verificada en la API pública). Correo de commits: `60237802+JSBeltran93@users.noreply.github.com`.
-- [x] `gh` autenticado como `JSBeltran93` (verificado 2026-11-15: el token responde `JSBeltran93`, scopes `repo`, `workflow`, `read:org`, `gist`). `gh auth status` lo muestra con la etiqueta antigua `JoanBeltranAlt` por un fallo de la versión 2.46; no afecta, lo que cuenta es `gh api user -q .login`.
-- [x] Git por HTTPS hacia github.com usa las credenciales de `gh` (`gh auth git-credential` ya configurado); probado en solo lectura contra un repo de `JSBeltran93`. El repo del reto usa HTTPS; la llave SSH sigue siendo de `JoanBeltranAlt` y no se usa para el reto.
-- [x] No existe todavía ningún repo `reto-03-*` en la cuenta.
-- [x] Correo de commits: `60237802+JSBeltran93@users.noreply.github.com` (configurado solo en el repo, §4 paso 1).
-- [ ] Conectar **Railway con la cuenta personal de GitHub** (no la del trabajo).
-- [ ] Usar una **clave de Anthropic personal** (facturación y límite de gasto propios), no una de la organización del trabajo.
-- [ ] Verificación final, ya dentro del repo: `git config user.email` muestra el noreply, `git remote -v` muestra la cuenta personal y `gh api user -q .login` devuelve la cuenta personal.
-
-**Estado verificado de credenciales (2026-11-15), antes de agregar la cuenta personal:** `gh` 2.46.0 (soporta varias cuentas y `gh auth switch`) con sesión activa en la cuenta de trabajo `JoanBeltranAlt` (protocolo SSH, scopes `repo`, `workflow`, `read:org`, `gist`: suficientes para crear el repo privado, subir el workflow de CI y agregar colaboradores); acceso SSH a GitHub verificado; identidad global de git = esa misma cuenta con correo corporativo; `init.defaultBranch` sin definir (por eso `git init -b main`); commits sin firma GPG; Node v22.21.1 y npm 11.14.0 (soportan `--env-file-if-exists`).
-- [ ] Clave de Anthropic con saldo y límite de gasto.
-- [ ] Releer §2 (arquitectura), §4 (comandos), §10.2 (casos) y §18 (cronograma).
+- [x] Herramientas instaladas (Node 22, npm, `gh`) y comandos de §4 ensayados en una carpeta temporal.
+- [x] Nombre del repositorio y del ZIP: `reto-03-beltran` (convención del PRD §9.5: `reto-03-<apellido>`).
+- [x] Cuenta de GitHub, correo de commits y credenciales verificados antes de iniciar (detalle omitido por privacidad).
+- [x] Despliegue en Railway conectado al repositorio, rama `develop`.
+- [x] Clave del modelo configurada solo como variable de entorno (local en `.env`, en Railway en Variables).
