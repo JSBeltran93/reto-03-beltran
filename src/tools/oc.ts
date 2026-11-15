@@ -14,6 +14,7 @@ import { avisoPaqueteRecibido, evaluarCaso } from "./oc/caso";
 import { crearOrdenCaso } from "./oc/crear-orden";
 import { EsquemaOrdenCompra, EsquemaPaqueteRecibido } from "./oc/esquemas";
 import { generarEvidencia, huellaEvidenciaCaso } from "./oc/evidencia";
+import { leerExcel } from "./oc/excel";
 import { definirHerramienta } from "./oc/herramienta";
 import { leerPaquete } from "./oc/paquete";
 import { construirOrden, guardarTrazabilidad } from "./oc/payload";
@@ -132,6 +133,21 @@ const herramientaGenerarEvidencia = () =>
     ejecutar: (args, ctx) => generarEvidencia(ctx.directory, args.caso),
   });
 
+const herramientaLeerExcel = () =>
+  definirHerramienta({
+    description:
+      "Lee la primera hoja de un libro .xlsx dentro de fixtures/ y devuelve sus filas con los encabezados como claves.",
+    args: {
+      ruta: z
+        .string()
+        .min(1)
+        .describe(
+          "Ruta del .xlsx relativa a la raíz del proyecto y dentro de fixtures/, por ejemplo fixtures/compras/solicitud.xlsx",
+        ),
+    },
+    ejecutar: (args, ctx) => leerExcel(ctx.directory, args.ruta),
+  });
+
 const herramientaCrear = (dependencias: DependenciasHerramientasOc) =>
   definirHerramienta({
     description:
@@ -158,17 +174,18 @@ const herramientaCrear = (dependencias: DependenciasHerramientasOc) =>
       ),
   });
 
-/** Las cinco herramientas del PRD, por su nombre de export. */
+/** Las herramientas del PRD (cinco P0 y `leer_excel`, P1), por su nombre de export. */
 export interface HerramientasOc {
   readonly leer_paquete: ReturnType<typeof herramientaLeerPaquete>;
   readonly validar: ReturnType<typeof herramientaValidar>;
   readonly construir_payload: ReturnType<typeof herramientaConstruirPayload>;
   readonly generar_evidencia: ReturnType<typeof herramientaGenerarEvidencia>;
   readonly crear: ReturnType<typeof herramientaCrear>;
+  readonly leer_excel: ReturnType<typeof herramientaLeerExcel>;
 }
 
 /**
- * Crea las cinco herramientas del PRD con las dependencias indicadas.
+ * Crea las herramientas del PRD con las dependencias indicadas.
  * @param dependencias - fábrica del adaptador SAP y reloj (por defecto, SAP simulado y reloj del sistema)
  * @returns herramientas indexadas por su nombre de export (el modelo las ve como `oc_<export>`)
  */
@@ -181,6 +198,7 @@ export function crearHerramientasOc(
     construir_payload: herramientaConstruirPayload(),
     generar_evidencia: herramientaGenerarEvidencia(),
     crear: herramientaCrear(dependencias),
+    leer_excel: herramientaLeerExcel(),
   };
 }
 
@@ -189,7 +207,8 @@ export const HERRAMIENTAS_OC = crearHerramientasOc();
 
 /**
  * Exports del contrato del PRD §6.2: `oc_leer_paquete` (HU-1), `oc_validar` (HU-2),
- * `oc_construir_payload` (HU-3), `oc_generar_evidencia` (HU-4) y `oc_crear` (HU-5).
+ * `oc_construir_payload` (HU-3), `oc_generar_evidencia` (HU-4), `oc_crear` (HU-5) y
+ * `oc_leer_excel` (P1 opcional: solicitudes que llegan como `.xlsx`).
  */
-export const { leer_paquete, validar, construir_payload, generar_evidencia, crear } =
+export const { leer_paquete, validar, construir_payload, generar_evidencia, crear, leer_excel } =
   HERRAMIENTAS_OC;
