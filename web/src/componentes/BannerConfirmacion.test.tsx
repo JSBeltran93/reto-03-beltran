@@ -3,9 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { BannerConfirmacion } from "./BannerConfirmacion";
+import { TEXTOS_CONFIRMACION } from "./textos";
 
 describe("BannerConfirmacion", () => {
-  it("se anuncia como alerta y llama a las acciones", async () => {
+  it("es una región etiquetada con la pregunta y llama a las acciones", async () => {
     const alConfirmar = vi.fn();
     const alCancelar = vi.fn();
     render(
@@ -16,7 +17,7 @@ describe("BannerConfirmacion", () => {
       />,
     );
 
-    expect(screen.getByRole("alert")).toHaveTextContent("necesita tu confirmación");
+    expect(screen.getByRole("region", { name: TEXTOS_CONFIRMACION.titulo })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Confirmo" }));
     await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
 

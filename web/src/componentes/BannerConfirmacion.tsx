@@ -1,4 +1,7 @@
-import { RESPUESTAS_CONFIRMACION } from "./textos";
+import { RESPUESTAS_CONFIRMACION, TEXTOS_CONFIRMACION } from "./textos";
+
+/** Identificador del título del aviso (lo usa `aria-labelledby`). */
+const ID_TITULO = "titulo-confirmacion";
 
 /** Props de {@link BannerConfirmacion}. */
 export interface PropiedadesBannerConfirmacion {
@@ -10,9 +13,10 @@ export interface PropiedadesBannerConfirmacion {
 
 /**
  * Aviso destacado cuando el agente espera la confirmación del usuario (PRD §6.1, CA3).
- * Los botones envían "Confirmo" o "Cancelar" como un mensaje normal.
+ * Es una región etiquetada (la pregunta ya se anuncia en el historial) y los botones
+ * envían "Confirmo" o "Cancelar" como un mensaje normal.
  * @param props - acciones y estado deshabilitado
- * @returns el banner
+ * @returns el aviso
  */
 export function BannerConfirmacion({
   deshabilitado,
@@ -20,12 +24,15 @@ export function BannerConfirmacion({
   alCancelar,
 }: PropiedadesBannerConfirmacion) {
   return (
-    <div
-      role="alert"
+    <section
+      aria-labelledby={ID_TITULO}
       className="rounded-xl border-2 border-warn bg-amber-50 p-4 text-sm text-amber-950 dark:bg-amber-950 dark:text-amber-100"
     >
-      <p className="font-semibold">⚠️ El agente necesita tu confirmación antes de crear la OC.</p>
-      <p className="mt-1">Revisa las validaciones de arriba y decide.</p>
+      <p id={ID_TITULO} className="font-semibold">
+        <span aria-hidden="true">⚠️ </span>
+        {TEXTOS_CONFIRMACION.titulo}
+      </p>
+      <p className="mt-1">{TEXTOS_CONFIRMACION.ayuda}</p>
       <div className="mt-3 flex gap-2">
         <button
           type="button"
@@ -44,6 +51,6 @@ export function BannerConfirmacion({
           {RESPUESTAS_CONFIRMACION.cancelar}
         </button>
       </div>
-    </div>
+    </section>
   );
 }
