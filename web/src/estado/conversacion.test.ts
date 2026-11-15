@@ -1,10 +1,10 @@
-import type { EntradaHistorial, VistaLlamada } from "@contratos/contratos-api";
+import type { VistaLlamada } from "@contratos/contratos-api";
 import { describe, expect, it } from "vitest";
 
 import {
   type AccionConversacion,
-  esperaConfirmacionEnHistorial,
   estadoInicial,
+  MENSAJE_CLAVE_INVALIDA,
   reducirConversacion,
 } from "./conversacion";
 
@@ -40,13 +40,40 @@ describe("reducirConversacion", () => {
       { esperaConfirmacion: true },
     ],
     [
-      "muestra los errores del sistema como error reintentable",
+      "guarda el caso pendiente que informa el servidor",
+      { tipo: "RESPUESTA", sessionId: SESION, respuesta: respuesta({ casoPendiente: "sol-004" }) },
+      { casoPendiente: "sol-004" },
+    ],
+    [
+      "muestra los errores del sistema como error reintentable sin perder la confirmación",
       {
         tipo: "RESPUESTA",
         sessionId: SESION,
         respuesta: respuesta({ esError: true, reply: "no disponible" }),
       },
-      { error: { mensaje: "no disponible", reintentable: true }, esperaConfirmacion: false },
+      {
+        error: { mensaje: "no disponible", reintentable: true, enHistorial: true },
+        esperaConfirmacion: true,
+        claveInvalida: false,
+      },
+    ],
+    [
+      "marca la clave inválida del modelo",
+      {
+        tipo: "RESPUESTA",
+        sessionId: SESION,
+        respuesta: respuesta({ esError: true, reply: MENSAJE_CLAVE_INVALIDA }),
+      },
+      { claveInvalida: true },
+    ],
+    [
+      "hidrata con el estado de confirmación del servidor",
+      {
+        tipo: "HIDRATAR",
+        sessionId: SESION,
+        sesion: { id: SESION, historial: [], needsConfirmation: true, casoPendiente: "sol-004" },
+      },
+      { esperaConfirmacion: true, casoPendiente: "sol-004" },
     ],
   ])("%s", (_nombre, accion, esperado) => {
     expect(reducirConversacion(estadoInicial(SESION), accion)).toMatchObject(esperado);
@@ -62,10 +89,24 @@ describe("reducirConversacion", () => {
     expect(estado.entradas.map((e) => e.tipo)).toEqual(["herramienta", "asistente"]);
   });
 
+  it("agrega al historial la respuesta marcada como error", () => {
+    const estado = reducirConversacion(estadoInicial(SESION), {
+      tipo: "RESPUESTA",
+      sessionId: SESION,
+      respuesta: respuesta({ esError: true, reply: "no disponible" }),
+    });
+
+    expect(estado.entradas.at(-1)).toEqual({ tipo: "error", texto: "no disponible" });
+  });
+
   it.each<AccionConversacion>([
     { tipo: "RESPUESTA", sessionId: "otra", respuesta: respuesta() },
     { tipo: "FALLO", sessionId: "otra", error: { mensaje: "x", reintentable: true } },
-    { tipo: "HIDRATAR", sessionId: "otra", historial: [{ tipo: "usuario", texto: "x" }] },
+    {
+      tipo: "HIDRATAR",
+      sessionId: "otra",
+      sesion: { id: "otra", historial: [], needsConfirmation: false, casoPendiente: null },
+    },
   ])("ignora $tipo de otra sesión", (accion) => {
     const estado = estadoInicial(SESION);
 
@@ -83,30 +124,5 @@ describe("reducirConversacion", () => {
     expect(reducirConversacion(conError, { tipo: "NUEVA_SESION", sessionId: "s2" })).toEqual(
       estadoInicial("s2"),
     );
-  });
-});
-
-describe("esperaConfirmacionEnHistorial", () => {
-  const pregunta: EntradaHistorial = { tipo: "asistente", texto: "¿Confirmas?" };
-  const herramienta = (nombre: string): EntradaHistorial => ({
-    tipo: "herramienta",
-    llamada: llamada(nombre),
-  });
-
-  it.each<[string, EntradaHistorial[], boolean]>([
-    ["payload construido y pregunta final", [herramienta("oc_construir_payload"), pregunta], true],
-    [
-      "OC ya creada",
-      [herramienta("oc_construir_payload"), herramienta("oc_crear"), pregunta],
-      false,
-    ],
-    ["sin payload", [herramienta("oc_validar"), pregunta], false],
-    [
-      "termina en el usuario",
-      [herramienta("oc_construir_payload"), { tipo: "usuario", texto: "x" }],
-      false,
-    ],
-  ])("%s → %s", (_nombre, historial, esperado) => {
-    expect(esperaConfirmacionEnHistorial(historial)).toBe(esperado);
   });
 });
