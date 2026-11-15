@@ -104,7 +104,9 @@
 }
 
 @layer base {
+  /* Encabezado y pie son opacos y fijos: lo que se desplaza hasta la vista queda entre ambos. */
   html {
+    scroll-padding-top: var(--alto-encabezado);
     scroll-padding-bottom: var(--espacio-pie);
     @apply bg-fondo font-sans text-texto antialiased;
   }

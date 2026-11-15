@@ -10,7 +10,6 @@ import type { OrdenRegistrada, SapAdapter } from "../../sap/adapter";
 import { type CasoEvaluado, evaluarCaso } from "./caso";
 import type { OrdenCompra } from "./esquemas";
 import { generarEvidencia, huellaEvidenciaCaso } from "./evidencia";
-import { NOMBRES_HERRAMIENTAS } from "./nombres";
 import { construirOrden } from "./payload";
 import { registrarControl, type ResultadoControl, RESULTADOS_CONTROL } from "./registro-control";
 import type { Validacion } from "./validacion";
@@ -19,7 +18,13 @@ import type { Validacion } from "./validacion";
 export interface OrdenCreada extends OrdenRegistrada {
   readonly idempotente: boolean;
   readonly ruta_evidencia: string;
+  /** Presente si el modelo envió un payload distinto: se creó con el validado. */
+  readonly aviso?: string;
 }
+
+/** Aviso cuando el payload recibido no coincide con el reconstruido desde los documentos. */
+export const AVISO_PAYLOAD_DISTINTO =
+  "El payload recibido difiere del validado; la OC se creó con el payload validado desde los documentos.";
 
 /** Dependencias de la creación de la OC, inyectadas para poder probarla. */
 export interface DependenciasCrear {
@@ -124,7 +129,8 @@ async function asegurarEvidencia(raiz: string, caso: string): Promise<Resultado<
 /**
  * Crea la orden de compra de un caso en SAP (HU-5).
  * Verifica en orden: idempotencia → reglas de bloqueo → confirmación del usuario →
- * integridad del payload (debe ser igual a la orden reconstruida desde los documentos).
+ * payload: siempre se crea con la orden reconstruida desde los documentos; si el modelo
+ * envió otra, se ignora y se avisa (el modelo no puede alterar el payload validado).
  * Cada intento queda en out/control.csv.
  * @param dependencias - raíz del proyecto, adaptador SAP, reloj y usuario que confirma
  * @param pedido - caso, payload y bandera de confirmación
@@ -149,14 +155,7 @@ export async function crearOrdenCaso(
   }
   const esperada = reconstruirOrden(dependencias.raiz, pedido.caso, evaluado.data);
   if (!esperada.ok) return esperada;
-  if (huella(pedido.payload) !== huella(esperada.data)) {
-    registrar(dependencias, base, RESULTADOS_CONTROL.bloqueada, null);
-    return fallo(
-      "PAYLOAD_ALTERADO",
-      "El payload no coincide con el validado.",
-      `Vuelva a ejecutar ${NOMBRES_HERRAMIENTAS.construirPayload} y envíe su resultado sin cambios.`,
-    );
-  }
+  const alterado = huella(pedido.payload) !== huella(esperada.data);
   return guardarEnSap(
     dependencias,
     base,
@@ -164,6 +163,7 @@ export async function crearOrdenCaso(
     {
       caso: pedido.caso,
       rutaEvidencia: ruta_evidencia,
+      alterado,
     },
   );
 }
@@ -176,7 +176,7 @@ async function guardarEnSap(
   dependencias: DependenciasCrear,
   base: Base,
   orden: OrdenCompra,
-  destino: { caso: string; rutaEvidencia: string },
+  destino: { caso: string; rutaEvidencia: string; alterado: boolean },
 ): Promise<Resultado<OrdenCreada>> {
   const evidencia = await asegurarEvidencia(dependencias.raiz, destino.caso);
   if (!evidencia.ok) return evidencia;
@@ -189,5 +189,6 @@ async function guardarEnSap(
     fecha: creada.fecha,
     idempotente: existente,
     ruta_evidencia: destino.rutaEvidencia,
+    ...(destino.alterado && { aviso: AVISO_PAYLOAD_DISTINTO }),
   });
 }

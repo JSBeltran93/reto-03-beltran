@@ -10,20 +10,27 @@ import { dependenciasCiclo } from "../apoyo/ciclo";
 import { crearProyectoTemporal } from "../apoyo/proyecto";
 import { LlmFalso, pedirHerramientas, respuestaTexto, ultimoResultado } from "../dobles/llm-falso";
 
-/** Guion que procesa sol-004 hasta la pregunta de confirmación, con resultados reales de herramientas. */
-function guionHastaPregunta() {
+/** Guion que procesa un caso hasta construir el payload y la evidencia, con resultados reales de herramientas. */
+function guionHastaPayload(caso: string) {
   let paquete: unknown;
   return [
-    pedirHerramientas({ nombre: "oc_leer_paquete", args: { caso: "sol-004" } }),
+    pedirHerramientas({ nombre: "oc_leer_paquete", args: { caso } }),
     (mensajes: readonly MensajeLlm[]) => {
       paquete = (ultimoResultado(mensajes) as { data: unknown }).data;
-      return pedirHerramientas({ nombre: "oc_validar", args: { caso: "sol-004", paquete } });
+      return pedirHerramientas({ nombre: "oc_validar", args: { caso, paquete } });
     },
     () =>
       pedirHerramientas(
-        { nombre: "oc_construir_payload", args: { caso: "sol-004", paquete, derivados: {} } },
-        { nombre: "oc_generar_evidencia", args: { caso: "sol-004" } },
+        { nombre: "oc_construir_payload", args: { caso, paquete, derivados: {} } },
+        { nombre: "oc_generar_evidencia", args: { caso } },
       ),
+  ];
+}
+
+/** Guion que procesa sol-004 hasta la pregunta de confirmación. */
+function guionHastaPregunta() {
+  return [
+    ...guionHastaPayload("sol-004"),
     respuestaTexto("La cotización difiere 6 %. ¿Confirmas la creación de la OC?"),
   ];
 }
@@ -77,7 +84,13 @@ describe("ciclo del agente", () => {
       respuestaTexto("Intenté crearla."),
     );
     const sinConfirmar = await ejecutarTurno(dependencias, "s1", "¿Qué pasó con el proveedor?");
-    expect(sinConfirmar.toolCalls[0]?.resumen).toContain("CONFIRMACION_NO_OTORGADA");
+    // La compuerta ejecuta con confirmado=false y la vista muestra lo que realmente se ejecutó.
+    expect(sinConfirmar.toolCalls[0]).toMatchObject({
+      ok: false,
+      args: { confirmado: false },
+    });
+    expect(sinConfirmar.toolCalls[0]?.resumen).toContain("REQUIERE_CONFIRMACION");
+    expect(sinConfirmar.needsConfirmation).toBe(true);
 
     llm.guion.push(
       pedirHerramientas({
@@ -87,8 +100,49 @@ describe("ciclo del agente", () => {
       respuestaTexto("OC creada."),
     );
     const confirmada = await ejecutarTurno(dependencias, "s1", "Confirmo");
-    expect(confirmada.toolCalls[0]).toMatchObject({ ok: true, resumen: "OC 4500000001" });
+    expect(confirmada.toolCalls[0]).toMatchObject({
+      ok: true,
+      args: { confirmado: true },
+      resumen: "OC 4500000001",
+    });
     expect(confirmada.needsConfirmation).toBe(false);
+  });
+
+  it("crea la OC de un caso sin confirmaciones aunque el modelo envíe confirmado=true (sol-001, O1)", async () => {
+    const llm = new LlmFalso(guionHastaPayload("sol-001"));
+    llm.guion.push(
+      () =>
+        pedirHerramientas({
+          nombre: "oc_crear",
+          args: { caso: "sol-001", payload: payloadConstruido(llm), confirmado: true },
+        }),
+      respuestaTexto("OC creada."),
+    );
+
+    const r = await ejecutarTurno(
+      dependenciasCiclo(llm, crearProyectoTemporal()),
+      "s1",
+      "Procesa la solicitud sol-001",
+    );
+
+    expect(r.toolCalls[1]?.resumen).toContain("confirmaciones: ninguna");
+    expect(r.toolCalls.at(-1)).toMatchObject({
+      nombre: "oc_crear",
+      ok: true,
+      args: { confirmado: false },
+      resumen: "OC 4500000001",
+    });
+    expect(r.needsConfirmation).toBe(false);
+    expect(r.casoPendiente).toBeNull();
+  });
+
+  it("no marca confirmación pendiente tras construir el payload de un caso sin confirmaciones", async () => {
+    const llm = new LlmFalso([...guionHastaPayload("sol-001"), respuestaTexto("Payload listo.")]);
+
+    const r = await ejecutarTurno(dependenciasCiclo(llm, crearProyectoTemporal()), "s1", "sol-001");
+
+    expect(r.toolCalls.map((t) => t.nombre)).toContain("oc_construir_payload");
+    expect(r.needsConfirmation).toBe(false);
   });
 
   it("devuelve al modelo los errores de argumentos en lugar de fallar (validación zod)", async () => {

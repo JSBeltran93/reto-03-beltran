@@ -5,9 +5,10 @@ import { AdaptadorGemini } from "./gemini";
 import { AdaptadorConRespaldo } from "./respaldo";
 
 /**
- * Crea el adaptador LLM de Gemini con el modelo principal y el de respaldo.
+ * Crea el adaptador LLM de Gemini: un adaptador por modelo, primero el principal y luego
+ * los de respaldo en el orden configurado.
  * @param configuracion - configuración cargada
- * @param registrador - registra los cambios al modelo de respaldo
+ * @param registrador - registra los cambios a un modelo de respaldo
  * @returns el adaptador con respaldo que usa el agente
  */
 export function crearAdaptadoresLlm(
@@ -21,7 +22,7 @@ export function crearAdaptadoresLlm(
       timeoutMs: configuracion.LLM_TIMEOUT_MS,
     });
   return new AdaptadorConRespaldo(
-    [crear(configuracion.LLM_MODELO), crear(configuracion.LLM_MODELO_RESPALDO)],
+    [configuracion.LLM_MODELO, ...configuracion.LLM_MODELOS_RESPALDO].map(crear),
     registrador,
   );
 }

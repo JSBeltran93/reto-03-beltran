@@ -31,4 +31,14 @@ describe("useNavegacion", () => {
     });
     expect(result.current).toMatchObject({ panel: PANELES.bandeja, seleccionado: "sol-004" });
   });
+
+  it("abre la conversación sin elegir caso", () => {
+    const { result } = renderHook(() => useNavegacion());
+
+    act(() => {
+      result.current.abrirConversacion();
+    });
+
+    expect(result.current).toMatchObject({ panel: PANELES.conversacion, seleccionado: null });
+  });
 });

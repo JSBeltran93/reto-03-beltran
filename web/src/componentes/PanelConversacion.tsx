@@ -1,5 +1,6 @@
 import type { ResumenCaso } from "@contratos/contratos-api";
 
+import { terminoEnError } from "../estado/conversacion";
 import { confirmacionesPendientes } from "../estado/resultados";
 import type { Conversacion } from "../estado/useConversacion";
 import { AvisosConversacion } from "./AvisosConversacion";
@@ -24,6 +25,8 @@ export interface PropiedadesPanelConversacion {
 
 /**
  * Mensajes y avisos del panel: estado vacío, historial, pensando, error y confirmación.
+ * Si el último turno fue un error y no hay confirmación pendiente, ese error del historial
+ * ofrece "Reintentar"; con confirmación pendiente manda la tarjeta de confirmación.
  * @param props - conversación, caso abierto y búsqueda de resúmenes
  * @returns el cuerpo de la conversación
  */
@@ -34,14 +37,21 @@ function CuerpoConversacion({
 }: Pick<PropiedadesPanelConversacion, "conversacion" | "caso" | "resumenDe">) {
   const { estado, cargando, enviar, reintentar } = conversacion;
   const { error, entradas, casoPendiente } = estado;
+  const mostrarConfirmacion = estado.esperaConfirmacion && !cargando;
+  const reintentable = terminoEnError(entradas) && !mostrarConfirmacion && !cargando;
   return (
     <>
       {entradas.length === 0 && caso === null && <EstadoVacio />}
-      {entradas.length > 0 && <ListaMensajes entradas={entradas} />}
+      {entradas.length > 0 && (
+        <ListaMensajes
+          entradas={entradas}
+          alReintentarUltimo={reintentable ? reintentar : undefined}
+        />
+      )}
       <AvisosConversacion
         cargando={cargando}
         error={error}
-        mostrarConfirmacion={estado.esperaConfirmacion && !cargando}
+        mostrarConfirmacion={mostrarConfirmacion}
         confirmaciones={confirmacionesPendientes(entradas, casoPendiente)}
         caso={casoPendiente}
         resumen={resumenDe(casoPendiente)}

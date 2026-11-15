@@ -41,21 +41,28 @@ export function guardarSesion(id: string): void {
   }
 }
 
+/** Sesión con la que arranca la página. */
+export interface SesionInicial {
+  readonly id: string;
+  /** true si se creó ahora: el servidor aún no la conoce y no hay historial que pedir. */
+  readonly nueva: boolean;
+}
+
 /**
  * Recupera la sesión guardada o crea una nueva si no hay o no es válida. Si el
  * almacenamiento no está disponible (modo privado), la sesión simplemente no se recuerda.
- * @returns identificador de sesión válido
+ * @returns identificador de sesión válido y si es nueva
  */
-export function leerSesionGuardada(): string {
+export function leerSesionInicial(): SesionInicial {
   try {
     const guardada = localStorage.getItem(CLAVE_SESION);
-    if (esIdSesionValido(guardada)) return guardada;
+    if (esIdSesionValido(guardada)) return { id: guardada, nueva: false };
   } catch {
-    return nuevoIdSesion();
+    return { id: nuevoIdSesion(), nueva: true };
   }
   const nueva = nuevoIdSesion();
   guardarSesion(nueva);
-  return nueva;
+  return { id: nueva, nueva: true };
 }
 
 /**

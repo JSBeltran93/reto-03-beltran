@@ -20,6 +20,39 @@ export interface PropiedadesBandeja {
   readonly deshabilitado?: boolean;
   readonly alSeleccionar: (caso: string) => void;
   readonly alReintentar: () => void;
+  /**
+   * Abre la conversación sin elegir caso (solo en móvil, donde la bandeja tapa el chat):
+   * si la bandeja no carga, igual se puede hablar con el agente.
+   */
+  readonly alAbrirConversacion?: () => void;
+}
+
+function ErrorBandeja({
+  alReintentar,
+  alAbrirConversacion,
+}: Pick<PropiedadesBandeja, "alReintentar" | "alAbrirConversacion">) {
+  return (
+    <div className={`${CLASES.tarjeta} space-y-3 p-4 text-sm`}>
+      <p role="alert">{TEXTOS_BANDEJA.error}</p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={alReintentar} className={CLASES.botonSecundario}>
+          {TEXTOS_BANDEJA.reintentar}
+        </button>
+        {alAbrirConversacion && (
+          <button
+            type="button"
+            onClick={alAbrirConversacion}
+            className={`${CLASES.botonPrimario} lg:hidden`}
+          >
+            {TEXTOS_BANDEJA.abrirConversacion}
+          </button>
+        )}
+      </div>
+      {alAbrirConversacion && (
+        <p className="text-texto-suave lg:hidden">{TEXTOS_BANDEJA.ayudaSinBandeja}</p>
+      )}
+    </div>
+  );
 }
 
 function Esqueleto() {
@@ -37,17 +70,14 @@ function Esqueleto() {
 }
 
 function Contenido(props: PropiedadesBandeja) {
-  const { casos, cargando, conError, seleccionado, deshabilitado, alSeleccionar, alReintentar } =
-    props;
+  const { casos, cargando, conError, seleccionado, deshabilitado, alSeleccionar } = props;
   if (cargando) return <Esqueleto />;
   if (conError || !casos) {
     return (
-      <div role="alert" className={`${CLASES.tarjeta} space-y-3 p-4 text-sm`}>
-        <p>{TEXTOS_BANDEJA.error}</p>
-        <button type="button" onClick={alReintentar} className={CLASES.botonSecundario}>
-          {TEXTOS_BANDEJA.reintentar}
-        </button>
-      </div>
+      <ErrorBandeja
+        alReintentar={props.alReintentar}
+        {...(props.alAbrirConversacion && { alAbrirConversacion: props.alAbrirConversacion })}
+      />
     );
   }
   if (casos.length === 0) {
@@ -73,7 +103,8 @@ function Contenido(props: PropiedadesBandeja) {
 
 /**
  * Bandeja de la analista: las solicitudes de compra con su estado (creada, pendiente,
- * bloqueada o sin procesar). Muestra esqueleto al cargar, error con reintento y vacío.
+ * bloqueada o sin procesar). Muestra esqueleto al cargar, error con reintento (y, en
+ * móvil, acceso directo a la conversación) y vacío.
  * @param props - casos, estado de la consulta, selección y acciones
  * @returns la bandeja
  */
