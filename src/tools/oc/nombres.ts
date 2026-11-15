@@ -8,4 +8,5 @@ export const NOMBRES_HERRAMIENTAS = {
   construirPayload: "oc_construir_payload",
   generarEvidencia: "oc_generar_evidencia",
   crear: "oc_crear",
+  leerExcel: "oc_leer_excel",
 } as const;

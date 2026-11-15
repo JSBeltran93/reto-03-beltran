@@ -21,3 +21,12 @@ export const NUMERO_PRIMERA_POSICION = 10;
 
 /** Regla que marca una OC como retroactiva (factura anterior a la solicitud). */
 export const REGLA_RETROACTIVA = "RC8";
+
+/** Extensión de los libros de Excel que acepta `oc_leer_excel`. */
+export const EXTENSION_EXCEL = ".xlsx";
+
+/** Tamaño máximo de un libro de Excel (5 MB): evita leer archivos desproporcionados. */
+export const MAX_BYTES_EXCEL = 5 * 1024 * 1024;
+
+/** Filas de datos máximas que devuelve `oc_leer_excel` (más allá se truncan). */
+export const MAX_FILAS_EXCEL = 500;
