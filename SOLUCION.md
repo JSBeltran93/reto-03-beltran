@@ -128,7 +128,7 @@ sequenceDiagram
 
 ## 4. Elección del modelo
 
-- **Proveedor y modelo:** Google Gemini (único proveedor), `gemini-3.6-flash` como principal (`LLM_MODELO`) y como respaldo, en orden, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite` y `gemini-3-flash-preview` (`LLM_MODELO_RESPALDO`, lista separada por comas: el plan gratuito limita el cupo diario por modelo), con el SDK `@google/genai`, llamadas a funciones en modo `AUTO` y ciclo manual en el servidor.
+- **Proveedor y modelo:** Google Gemini (único proveedor), `gemini-3.6-flash` como principal (`LLM_MODELO`) y como respaldo, en orden, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite` y `gemini-3-flash-preview` (`LLM_MODELO_RESPALDO`, lista separada por comas: el plan gratuito limita el cupo diario por modelo), con el SDK `@google/genai`, llamadas a funciones en modo `AUTO` y ciclo manual en el servidor. Latencia: las decisiones de negocio son deterministas en las herramientas y el modelo solo orquesta, así que el razonamiento va en `thinkingLevel` bajo (`LLM_RAZONAMIENTO`, por defecto `bajo`; Gemini 3 Flash razona en alto si no se fija), con `maxOutputTokens` de 8 192 y la temperatura en 1, la que Google recomienda para Gemini 3.
 - **Por qué:**
   - La clave es gratuita y se obtiene al instante en Google AI Studio (https://aistudio.google.com/apikey): cualquiera puede levantar el proyecto sin cuenta de pago.
   - Buen uso de herramientas (_function calling_) con esquemas JSON derivados de zod, que es lo único que el agente necesita del modelo.
@@ -335,7 +335,7 @@ Asistente: **Claude Code (modelo Claude Opus 5.5)**, en terminal y VS Code. Todo
 ### Plan de despliegue y operación
 
 - **Railway** con configuración como código (`railway.json`): build por defecto de Railpack (instala dependencias y ejecuta `npm run build`), arranque `npm start`, health check en `/api/health`.
-- **Variables:** `GEMINI_API_KEY` (solo en Railway, nunca en el repo), `LLM_MODELO`, `LLM_MODELO_RESPALDO`, `LLM_TIMEOUT_MS`, `MAX_ITERACIONES`, `MAX_TOKENS_SESION`, `MAX_TOKENS_DIA`, `MAX_SESIONES`, `MAX_SEGUNDOS_TURNO` y `MAX_SOLICITUDES_MINUTO` (ver `.env.example`); `PORT` lo asigna Railway.
+- **Variables:** `GEMINI_API_KEY` (solo en Railway, nunca en el repo), `LLM_MODELO`, `LLM_MODELO_RESPALDO`, `LLM_RAZONAMIENTO`, `LLM_TIMEOUT_MS`, `MAX_ITERACIONES`, `MAX_TOKENS_SESION`, `MAX_TOKENS_DIA`, `MAX_SESIONES`, `MAX_SEGUNDOS_TURNO` y `MAX_SOLICITUDES_MINUTO` (ver `.env.example`); `PORT` lo asigna Railway.
 - **Despliegue:** un push a `develop` despliega; alternativa equivalente con `railway up` desde la terminal o el CI.
 - **Verificación:** `/api/health` y el prompt del PRD §11 en el link público.
 

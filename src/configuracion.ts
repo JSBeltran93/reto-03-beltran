@@ -3,11 +3,22 @@ import { z } from "zod";
 /** Proveedor de modelo elegido (único): Google Gemini, con su adaptador en src/llm/gemini.ts. */
 export const PROVEEDOR_LLM = "gemini";
 
+/**
+ * Niveles de razonamiento admitidos en `LLM_RAZONAMIENTO`; el adaptador de Gemini los
+ * traduce a `thinkingLevel`. Las decisiones de negocio son deterministas en las
+ * herramientas y el modelo solo orquesta, por eso el valor por defecto es bajo.
+ */
+export const NIVELES_RAZONAMIENTO = ["minimo", "bajo", "medio", "alto"] as const;
+
+/** Nivel de razonamiento del modelo (`LLM_RAZONAMIENTO`). */
+export type NivelRazonamiento = (typeof NIVELES_RAZONAMIENTO)[number];
+
 /** Valores por defecto de la configuración (se sobrescriben con variables de entorno). */
 export const VALORES_POR_DEFECTO = {
   modelo: "gemini-3.6-flash",
   /** Modelos de respaldo en orden, separados por comas (el plan gratuito limita el cupo diario por modelo). */
   modelosRespaldo: "gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3-flash-preview",
+  razonamiento: "bajo" satisfies NivelRazonamiento,
   timeoutMs: 60_000,
   maxIteraciones: 25,
   maxTokensSesion: 200_000,
@@ -54,14 +65,18 @@ const enteroPositivo = (porDefecto: number) =>
 
 /**
  * Esquema de las variables de entorno; ver `.env.example`. Si no se fijan los modelos,
- * se usan los valores por defecto. `LLM_MODELO_RESPALDO` (lista separada por comas) se
- * expone como `LLM_MODELOS_RESPALDO`.
+ * se usan los valores por defecto; `LLM_RAZONAMIENTO` admite `NIVELES_RAZONAMIENTO`.
+ * `LLM_MODELO_RESPALDO` (lista separada por comas) se expone como `LLM_MODELOS_RESPALDO`.
  */
 const EsquemaConfiguracion = z
   .object({
     GEMINI_API_KEY: z.string().default(""),
     LLM_MODELO: textoOpcional,
     LLM_MODELO_RESPALDO: textoOpcional,
+    LLM_RAZONAMIENTO: z.preprocess(
+      (valor) => (valor === "" ? undefined : valor),
+      z.enum(NIVELES_RAZONAMIENTO).default(VALORES_POR_DEFECTO.razonamiento),
+    ),
     LLM_TIMEOUT_MS: enteroPositivo(VALORES_POR_DEFECTO.timeoutMs),
     MAX_ITERACIONES: enteroPositivo(VALORES_POR_DEFECTO.maxIteraciones),
     MAX_TOKENS_SESION: enteroPositivo(VALORES_POR_DEFECTO.maxTokensSesion),

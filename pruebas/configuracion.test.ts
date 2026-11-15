@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { cargarConfiguracion, separarModelos, VALORES_POR_DEFECTO } from "../src/configuracion";
+import {
+  cargarConfiguracion,
+  NIVELES_RAZONAMIENTO,
+  separarModelos,
+  VALORES_POR_DEFECTO,
+} from "../src/configuracion";
 
 describe("cargarConfiguracion", () => {
   it("usa los valores por defecto, incluido el modelo de respaldo", () => {
@@ -12,6 +17,7 @@ describe("cargarConfiguracion", () => {
       "gemini-3.1-flash-lite",
       "gemini-3-flash-preview",
     ]);
+    expect(configuracion.LLM_RAZONAMIENTO).toBe("bajo");
     expect(configuracion.MAX_SEGUNDOS_TURNO).toBe(VALORES_POR_DEFECTO.maxSegundosTurno);
     expect(configuracion.GEMINI_API_KEY).toBe("");
   });
@@ -46,6 +52,20 @@ describe("cargarConfiguracion", () => {
     expect(cargarConfiguracion({ LLM_MODELO_RESPALDO: " , " }).LLM_MODELOS_RESPALDO).toEqual(
       separarModelos(VALORES_POR_DEFECTO.modelosRespaldo),
     );
+  });
+
+  it.each(NIVELES_RAZONAMIENTO)("acepta el nivel de razonamiento %s", (nivel) => {
+    expect(cargarConfiguracion({ LLM_RAZONAMIENTO: nivel }).LLM_RAZONAMIENTO).toBe(nivel);
+  });
+
+  it("trata un nivel de razonamiento vacío como no definido", () => {
+    expect(cargarConfiguracion({ LLM_RAZONAMIENTO: "" }).LLM_RAZONAMIENTO).toBe(
+      VALORES_POR_DEFECTO.razonamiento,
+    );
+  });
+
+  it("rechaza un nivel de razonamiento desconocido nombrando la variable", () => {
+    expect(() => cargarConfiguracion({ LLM_RAZONAMIENTO: "LOW" })).toThrow(/LLM_RAZONAMIENTO/);
   });
 
   it("convierte números desde texto", () => {
