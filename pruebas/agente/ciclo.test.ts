@@ -77,7 +77,7 @@ describe("ciclo del agente", () => {
       respuestaTexto("Intenté crearla."),
     );
     const sinConfirmar = await ejecutarTurno(deps, "s1", "¿Qué pasó con el proveedor?");
-    expect(sinConfirmar.toolCalls[0]?.resumen).toBe("CONFIRMACION_NO_OTORGADA");
+    expect(sinConfirmar.toolCalls[0]?.resumen).toContain("CONFIRMACION_NO_OTORGADA");
 
     llm.guion.push(
       pedirHerramientas({
@@ -103,7 +103,7 @@ describe("ciclo del agente", () => {
     expect(r.reply).toContain("ARGS_INVALIDOS");
   });
 
-  it("se detiene en el tope de iteraciones y pide un resumen sin herramientas (CA1)", async () => {
+  it("se detiene en el tope de iteraciones y pide un resumen sin llamar herramientas (CA1)", async () => {
     const pasos = Array.from({ length: 3 }, () =>
       pedirHerramientas({ nombre: "oc_leer_paquete", args: { caso: "sol-001" } }),
     );
@@ -117,7 +117,9 @@ describe("ciclo del agente", () => {
 
     expect(r.toolCalls).toHaveLength(3);
     expect(r.reply).toContain("Resumen");
-    expect(llm.peticiones.at(-1)?.herramientas).toEqual([]);
+    const cierre = llm.peticiones.at(-1);
+    expect(cierre?.herramientas.length).toBeGreaterThan(0);
+    expect(cierre?.opciones).toEqual({ sinLlamadas: true });
   });
 
   it("muestra con claridad los errores del proveedor y mantiene viva la sesión (CA5)", async () => {

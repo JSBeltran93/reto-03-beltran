@@ -66,7 +66,15 @@ function resumir(nombre: string, data: unknown): string {
   }
 }
 
-function ejecucionFallida(
+/**
+ * Ejecución fallida con el formato del contrato, para errores que ocurren antes o
+ * alrededor de la herramienta (argumentos inválidos, excepciones inesperadas).
+ * @param llamada - llamada pedida por el modelo
+ * @param codigo - código del catálogo
+ * @param mensaje - mensaje legible
+ * @returns vista con error, JSON para el modelo y sin datos
+ */
+export function ejecucionFallida(
   llamada: LlamadaHerramienta,
   codigo: CodigoError,
   mensaje: string,

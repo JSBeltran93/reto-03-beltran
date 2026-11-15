@@ -23,6 +23,8 @@ describe("esAfirmativo", () => {
     ["no confirmo", false],
     ["cancela", false],
     ["¿qué falta?", false],
+    ["¿por qué debo decir confirmo?", false],
+    ["Sí, confirmo, no hay problema", true],
   ])("%j → %s", (mensaje, esperado) => {
     expect(esAfirmativo(mensaje)).toBe(esperado);
   });
@@ -32,7 +34,9 @@ describe("compuerta de confirmación", () => {
   it("bloquea oc_crear con confirmado=true si el usuario no ha confirmado", () => {
     const estado: EstadoConfirmacion = { pendiente: "sol-004", otorgada: null };
 
-    expect(autorizar(estado, llamadaCrear("sol-004", true))).toContain("CONFIRMACION_NO_OTORGADA");
+    expect(autorizar(estado, llamadaCrear("sol-004", true))?.json).toContain(
+      "CONFIRMACION_NO_OTORGADA",
+    );
   });
 
   it("solo lo permite para el caso que el usuario confirmó en su último mensaje", () => {
@@ -40,7 +44,9 @@ describe("compuerta de confirmación", () => {
     alMensajeUsuario(estado, "Confirmo");
 
     expect(autorizar(estado, llamadaCrear("sol-004", true))).toBeNull();
-    expect(autorizar(estado, llamadaCrear("sol-005", true))).toContain("CONFIRMACION_NO_OTORGADA");
+    expect(autorizar(estado, llamadaCrear("sol-005", true))?.json).toContain(
+      "CONFIRMACION_NO_OTORGADA",
+    );
   });
 
   it("revoca la confirmación con el siguiente mensaje y limpia ante un rechazo", () => {
