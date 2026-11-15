@@ -91,6 +91,15 @@ describe("reglas de control", () => {
     expect(rc2?.accion_sugerida).toContain("rtorres@periferia-ficticia.com");
   });
 
+  it("RC3 explica que un aprobador ajeno al centro no tiene tope, sin inventar un tope 0 (sol-003)", () => {
+    const v = validarPaquete(paqueteDe("sol-003"), maestrosReales());
+    const rc3 = v.bloqueos.find((h) => h.regla === "RC3");
+
+    expect(rc3?.detalle).toContain("no tiene tope en CC-2020");
+    expect(rc3?.detalle).not.toContain("(0)");
+    expect(rc3?.valores).toEqual({ valor_total: 74_000_000 });
+  });
+
   it("RC5 informa ambos montos (sol-004)", () => {
     const v = validarPaquete(paqueteDe("sol-004"), maestrosReales());
 

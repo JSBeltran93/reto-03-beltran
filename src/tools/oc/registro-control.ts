@@ -57,20 +57,48 @@ export function filaCsv(fila: FilaControl): string {
 }
 
 /**
- * Último resultado registrado para una solicitud, para no inflar la métrica con repeticiones.
+ * Celdas de la última fila de una solicitud, sin la columna `solicitud_id`.
  * @param archivo - ruta de control.csv
  * @param solicitudId - identificador de la solicitud
- * @returns el último resultado, o null si no hay filas de esa solicitud
+ * @returns las celdas restantes (resultado, numero_oc, …), o null si no hay filas
  */
-function ultimoResultado(archivo: string, solicitudId: string): string | null {
+function ultimaFila(archivo: string, solicitudId: string): string[] | null {
+  const prefijo = `${celda(solicitudId)},`;
   const filas = readFileSync(archivo, "utf8").trim().split("\n").slice(1);
-  const propias = filas.filter((linea) => linea.startsWith(`${celda(solicitudId)},`));
-  return propias.at(-1)?.split(",")[1] ?? null;
+  const linea = filas.filter((fila) => fila.startsWith(prefijo)).at(-1);
+  return linea === undefined ? null : linea.slice(prefijo.length).split(",");
+}
+
+/** Último registro de control de una solicitud, tal como lo lee la bandeja. */
+export interface UltimoControl {
+  readonly resultado: string;
+  readonly numero_oc: string | null;
 }
 
 /**
- * Agrega una fila a `<raiz>/out/control.csv` (una por intento distinto, HU-5); escribe el
- * encabezado la primera vez y omite la fila si repite el último resultado de esa solicitud.
+ * Lee el último registro de control de una solicitud; nunca lanza.
+ * @param raiz - raíz del proyecto
+ * @param solicitudId - identificador de la solicitud
+ * @returns resultado y número de OC, o null si no hay registro o no se puede leer
+ */
+export function ultimoControl(raiz: string, solicitudId: string): UltimoControl | null {
+  const archivo = rutaSalida(raiz, ARCHIVOS_SALIDA.control);
+  try {
+    const celdas = existsSync(archivo) ? ultimaFila(archivo, solicitudId) : null;
+    if (!celdas?.[0]) return null;
+    const numeroOc = celdas[1];
+    return {
+      resultado: celdas[0],
+      numero_oc: numeroOc === undefined || numeroOc === "" ? null : numeroOc,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Agrega una fila a `<raiz>/out/control.csv` por cada intento de crear la OC (HU-5), sin
+ * deduplicar; escribe el encabezado la primera vez.
  * @param raiz - raíz del proyecto
  * @param fila - fila a agregar
  */
@@ -78,6 +106,5 @@ export function registrarControl(raiz: string, fila: FilaControl): void {
   const archivo = rutaSalida(raiz, ARCHIVOS_SALIDA.control);
   mkdirSync(rutaSalida(raiz), { recursive: true });
   if (!existsSync(archivo)) appendFileSync(archivo, `${ENCABEZADO}\n`);
-  if (ultimoResultado(archivo, fila.solicitud_id) === fila.resultado) return;
   appendFileSync(archivo, `${filaCsv(fila)}\n`);
 }

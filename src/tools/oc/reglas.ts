@@ -155,20 +155,19 @@ const RC3: Regla = {
     const aprobacion = ctx.paquete.aprobacion;
     if (aprobacion === null) return [];
     const { valor_total, centro_costo } = ctx.paquete.solicitud;
-    const tope = aprobadorEnCentro(ctx)?.tope ?? 0;
-    if (valor_total <= tope) return [];
+    const tope = aprobadorEnCentro(ctx)?.tope;
+    if (tope !== undefined && valor_total <= tope) return [];
     const cubren = (ctx.centro?.aprobadores ?? []).filter((a) => a.tope >= valor_total);
     const accion = cubren.length
       ? `Solicitar aprobación de ${cubren.map((a) => a.email).join(" o ")}.`
       : `Ningún aprobador de ${centro_costo} cubre ${formatearMonto(valor_total)}: escalar a la dirección.`;
-    return [
-      hallazgo(
-        "RC3",
-        "bloqueo",
-        `El valor ${formatearMonto(valor_total)} supera el tope de ${aprobacion.de} en ${centro_costo} (${formatearMonto(tope)}).`,
-        { valores: { valor_total, tope }, accion_sugerida: accion },
-      ),
-    ];
+    const monto = formatearMonto(valor_total);
+    const detalle =
+      tope === undefined
+        ? `${aprobacion.de} no tiene tope en ${centro_costo} (no es aprobador de ese centro), así que no puede autorizar ${monto}.`
+        : `El valor ${monto} supera el tope de ${aprobacion.de} en ${centro_costo} (${formatearMonto(tope)}).`;
+    const valores = tope === undefined ? { valor_total } : { valor_total, tope };
+    return [hallazgo("RC3", "bloqueo", detalle, { valores, accion_sugerida: accion })];
   },
 };
 

@@ -18,14 +18,14 @@ import { generarEvidencia, huellaEvidenciaCaso } from "./oc/evidencia";
 import { definirHerramienta } from "./oc/herramienta";
 import { leerPaquete } from "./oc/paquete";
 import { construirOrden, guardarTrazabilidad } from "./oc/payload";
-import { registrarControl, type ResultadoControl, RESULTADOS_CONTROL } from "./oc/registro-control";
+import { registrarControl, RESULTADOS_CONTROL } from "./oc/registro-control";
 import type { Validacion } from "./oc/validacion";
 
 /** Dependencias externas de las herramientas. */
 export interface DependenciasHerramientasOc {
   /** Crea el adaptador SAP para la raíz del proyecto de cada llamada. */
   readonly crearSap: (raiz: string) => SapAdapter;
-  /** Fuente de la hora para el registro de control. */
+  /** Fuente de la hora para el registro de control (`oc_validar` bloqueada y `oc_crear`). */
   readonly reloj: Reloj;
 }
 
@@ -44,31 +44,6 @@ const paquete = EsquemaPaquete.describe(
 const AVISO_PAQUETE_DISTINTO =
   "El paquete recibido difiere de los documentos del caso; se validó con los documentos originales.";
 
-/**
- * Registra un intento en el control (HU-5) con los hallazgos de la validación.
- * @param dependencias - reloj de las herramientas
- * @param raiz - raíz del proyecto
- * @param evaluado - solicitud y validación del caso
- * @param resultado - `bloqueada` al validar un caso no apto; `pendiente` al construir el payload
- */
-function registrarIntento(
-  dependencias: DependenciasHerramientasOc,
-  raiz: string,
-  evaluado: { solicitudId: string; validacion: Validacion },
-  resultado: ResultadoControl,
-): void {
-  const { solicitudId, validacion } = evaluado;
-  registrarControl(raiz, {
-    solicitud_id: solicitudId,
-    resultado,
-    numero_oc: null,
-    retroactiva: validacion.retroactiva,
-    bloqueos: validacion.bloqueos.map((h) => h.regla),
-    confirmaciones: validacion.confirmaciones.map((h) => h.regla),
-    ts: dependencias.reloj.ahora().toISOString(),
-  });
-}
-
 const herramientaLeerPaquete = () =>
   definirHerramienta({
     description:
@@ -76,6 +51,27 @@ const herramientaLeerPaquete = () =>
     args: { caso },
     ejecutar: (args, ctx) => leerPaquete(ctx.directory, args.caso),
   });
+
+/**
+ * Un caso bloqueado no llega a `oc_crear` (no hay payload que enviar), así que su
+ * intento se registra al validarlo: HU-5 pide una fila por intento, también bloqueado.
+ */
+function registrarBloqueo(
+  raiz: string,
+  solicitudId: string,
+  validacion: Validacion,
+  reloj: Reloj,
+): void {
+  registrarControl(raiz, {
+    solicitud_id: solicitudId,
+    resultado: RESULTADOS_CONTROL.bloqueada,
+    numero_oc: null,
+    retroactiva: validacion.retroactiva,
+    bloqueos: validacion.bloqueos.map((h) => h.regla),
+    confirmaciones: validacion.confirmaciones.map((h) => h.regla),
+    ts: reloj.ahora().toISOString(),
+  });
+}
 
 const herramientaValidar = (dependencias: DependenciasHerramientasOc) =>
   definirHerramienta({
@@ -87,15 +83,19 @@ const herramientaValidar = (dependencias: DependenciasHerramientasOc) =>
       if (!evaluado.ok) return evaluado;
       const { paquete: fuente, validacion } = evaluado.data;
       if (!validacion.apta) {
-        const intento = { solicitudId: fuente.solicitud.solicitud_id, validacion };
-        registrarIntento(dependencias, ctx.directory, intento, RESULTADOS_CONTROL.bloqueada);
+        registrarBloqueo(
+          ctx.directory,
+          fuente.solicitud.solicitud_id,
+          validacion,
+          dependencias.reloj,
+        );
       }
       const alterado = huella(args.paquete) !== huella(fuente);
       return exito(alterado ? { ...validacion, aviso: AVISO_PAQUETE_DISTINTO } : validacion);
     },
   });
 
-const herramientaConstruirPayload = (dependencias: DependenciasHerramientasOc) =>
+const herramientaConstruirPayload = () =>
   definirHerramienta({
     description:
       "Construye la orden de compra tal como quedaría en SAP, con la trazabilidad de cada valor, a partir de un paquete validado.",
@@ -114,10 +114,6 @@ const herramientaConstruirPayload = (dependencias: DependenciasHerramientasOc) =
       const { paquete: fuente, validacion } = evaluado.data;
       const orden = construirOrden(fuente, validacion, huellaEvidencia.data);
       if (!orden.ok) return orden;
-      if (validacion.confirmaciones.length > 0) {
-        const intento = { solicitudId: fuente.solicitud.solicitud_id, validacion };
-        registrarIntento(dependencias, ctx.directory, intento, RESULTADOS_CONTROL.pendiente);
-      }
       const ruta = guardarTrazabilidad(ctx.directory, args.caso, orden.data);
       return exito({ orden: orden.data.orden, ruta_trazabilidad: ruta });
     },
@@ -177,7 +173,7 @@ export function crearHerramientasOc(
   return {
     leer_paquete: herramientaLeerPaquete(),
     validar: herramientaValidar(dependencias),
-    construir_payload: herramientaConstruirPayload(dependencias),
+    construir_payload: herramientaConstruirPayload(),
     generar_evidencia: herramientaGenerarEvidencia(),
     crear: herramientaCrear(dependencias),
   };
