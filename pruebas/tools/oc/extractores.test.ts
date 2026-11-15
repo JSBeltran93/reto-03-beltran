@@ -78,8 +78,11 @@ describe("extraerCotizacion", () => {
     });
   });
 
-  it("falla si no hay total", () => {
-    expect(extraerCotizacion("Proveedor: X\n").ok).toBe(false);
+  it("falla si no hay total y sugiere pedir el documento de nuevo", () => {
+    const resultado = extraerCotizacion("Proveedor: X\n");
+
+    expect(resultado.ok).toBe(false);
+    expect(resultado.ok ? undefined : resultado.error.accion_sugerida).toBeTruthy();
   });
 });
 

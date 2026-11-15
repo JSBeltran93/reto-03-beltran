@@ -14,11 +14,11 @@ import { SapSimulado } from "../sap/mock";
 import { evaluarCaso } from "./oc/caso";
 import { crearOrdenCaso } from "./oc/crear-orden";
 import { EsquemaOrdenCompra, EsquemaPaquete } from "./oc/esquemas";
-import { generarEvidencia, hashEvidenciaCaso } from "./oc/evidencia";
+import { generarEvidencia, huellaEvidenciaCaso } from "./oc/evidencia";
 import { definirHerramienta } from "./oc/herramienta";
 import { leerPaquete } from "./oc/paquete";
 import { construirOrden, guardarTrazabilidad } from "./oc/payload";
-import { registrarControl, RESULTADOS_CONTROL } from "./oc/registro-control";
+import { registrarControl, type ResultadoControl, RESULTADOS_CONTROL } from "./oc/registro-control";
 import type { Validacion } from "./oc/validacion";
 
 /** Dependencias externas de las herramientas. */
@@ -45,21 +45,19 @@ const AVISO_PAQUETE_DISTINTO =
   "El paquete recibido difiere de los documentos del caso; se validó con los documentos originales.";
 
 /**
- * Registra en el control el resultado de una validación (HU-5): `bloqueada` si no es apta,
- * `pendiente` si es apta pero espera confirmación; las aptas sin confirmaciones se registran al crear.
+ * Registra un intento en el control (HU-5) con los hallazgos de la validación.
+ * @param dependencias - reloj de las herramientas
+ * @param raiz - raíz del proyecto
+ * @param evaluado - solicitud y validación del caso
+ * @param resultado - `bloqueada` al validar un caso no apto; `pendiente` al construir el payload
  */
-function registrarValidacion(
+function registrarIntento(
+  dependencias: DependenciasHerramientasOc,
   raiz: string,
-  reloj: Reloj,
-  solicitudId: string,
-  validacion: Validacion,
+  evaluado: { solicitudId: string; validacion: Validacion },
+  resultado: ResultadoControl,
 ): void {
-  const resultado = !validacion.apta
-    ? RESULTADOS_CONTROL.bloqueada
-    : validacion.confirmaciones.length > 0
-      ? RESULTADOS_CONTROL.pendiente
-      : null;
-  if (resultado === null) return;
+  const { solicitudId, validacion } = evaluado;
   registrarControl(raiz, {
     solicitud_id: solicitudId,
     resultado,
@@ -67,7 +65,7 @@ function registrarValidacion(
     retroactiva: validacion.retroactiva,
     bloqueos: validacion.bloqueos.map((h) => h.regla),
     confirmaciones: validacion.confirmaciones.map((h) => h.regla),
-    ts: reloj.ahora().toISOString(),
+    ts: dependencias.reloj.ahora().toISOString(),
   });
 }
 
@@ -79,7 +77,7 @@ const herramientaLeerPaquete = () =>
     ejecutar: (args, ctx) => leerPaquete(ctx.directory, args.caso),
   });
 
-const herramientaValidar = (deps: DependenciasHerramientasOc) =>
+const herramientaValidar = (dependencias: DependenciasHerramientasOc) =>
   definirHerramienta({
     description:
       "Valida el paquete contra los maestros y las reglas RC1-RC10 y devuelve bloqueos, confirmaciones, valores derivados y si la compra es retroactiva.",
@@ -88,13 +86,16 @@ const herramientaValidar = (deps: DependenciasHerramientasOc) =>
       const evaluado = evaluarCaso(ctx.directory, args.caso);
       if (!evaluado.ok) return evaluado;
       const { paquete: fuente, validacion } = evaluado.data;
-      registrarValidacion(ctx.directory, deps.reloj, fuente.solicitud.solicitud_id, validacion);
+      if (!validacion.apta) {
+        const intento = { solicitudId: fuente.solicitud.solicitud_id, validacion };
+        registrarIntento(dependencias, ctx.directory, intento, RESULTADOS_CONTROL.bloqueada);
+      }
       const alterado = huella(args.paquete) !== huella(fuente);
       return exito(alterado ? { ...validacion, aviso: AVISO_PAQUETE_DISTINTO } : validacion);
     },
   });
 
-const herramientaConstruirPayload = () =>
+const herramientaConstruirPayload = (dependencias: DependenciasHerramientasOc) =>
   definirHerramienta({
     description:
       "Construye la orden de compra tal como quedaría en SAP, con la trazabilidad de cada valor, a partir de un paquete validado.",
@@ -108,10 +109,15 @@ const herramientaConstruirPayload = () =>
     ejecutar: (args, ctx) => {
       const evaluado = evaluarCaso(ctx.directory, args.caso);
       if (!evaluado.ok) return evaluado;
-      const hash = hashEvidenciaCaso(ctx.directory, args.caso);
-      if (!hash.ok) return hash;
-      const orden = construirOrden(evaluado.data.paquete, evaluado.data.validacion, hash.data);
+      const huellaEvidencia = huellaEvidenciaCaso(ctx.directory, args.caso);
+      if (!huellaEvidencia.ok) return huellaEvidencia;
+      const { paquete: fuente, validacion } = evaluado.data;
+      const orden = construirOrden(fuente, validacion, huellaEvidencia.data);
       if (!orden.ok) return orden;
+      if (validacion.confirmaciones.length > 0) {
+        const intento = { solicitudId: fuente.solicitud.solicitud_id, validacion };
+        registrarIntento(dependencias, ctx.directory, intento, RESULTADOS_CONTROL.pendiente);
+      }
       const ruta = guardarTrazabilidad(ctx.directory, args.caso, orden.data);
       return exito({ orden: orden.data.orden, ruta_trazabilidad: ruta });
     },
@@ -125,7 +131,7 @@ const herramientaGenerarEvidencia = () =>
     ejecutar: (args, ctx) => generarEvidencia(ctx.directory, args.caso),
   });
 
-const herramientaCrear = (deps: DependenciasHerramientasOc) =>
+const herramientaCrear = (dependencias: DependenciasHerramientasOc) =>
   definirHerramienta({
     description:
       "Crea la orden de compra en SAP; solo funciona si el caso es apto y, cuando hay confirmaciones, si el usuario ya confirmó.",
@@ -143,8 +149,8 @@ const herramientaCrear = (deps: DependenciasHerramientasOc) =>
       crearOrdenCaso(
         {
           raiz: ctx.directory,
-          sap: deps.crearSap(ctx.directory),
-          reloj: deps.reloj,
+          sap: dependencias.crearSap(ctx.directory),
+          reloj: dependencias.reloj,
           confirmadoPor: `sesion:${ctx.sessionId}`,
         },
         { caso: args.caso, payload: args.payload, confirmado: args.confirmado === true },
@@ -162,18 +168,18 @@ export interface HerramientasOc {
 
 /**
  * Crea las cinco herramientas del PRD con las dependencias indicadas.
- * @param deps - fábrica del adaptador SAP y reloj (por defecto, SAP simulado y reloj del sistema)
+ * @param dependencias - fábrica del adaptador SAP y reloj (por defecto, SAP simulado y reloj del sistema)
  * @returns herramientas indexadas por su nombre de export (el modelo las ve como `oc_<export>`)
  */
 export function crearHerramientasOc(
-  deps: DependenciasHerramientasOc = DEPENDENCIAS_POR_DEFECTO,
+  dependencias: DependenciasHerramientasOc = DEPENDENCIAS_POR_DEFECTO,
 ): HerramientasOc {
   return {
     leer_paquete: herramientaLeerPaquete(),
-    validar: herramientaValidar(deps),
-    construir_payload: herramientaConstruirPayload(),
+    validar: herramientaValidar(dependencias),
+    construir_payload: herramientaConstruirPayload(dependencias),
     generar_evidencia: herramientaGenerarEvidencia(),
-    crear: herramientaCrear(deps),
+    crear: herramientaCrear(dependencias),
   };
 }
 

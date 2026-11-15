@@ -73,6 +73,16 @@ describe("reglas de control", () => {
     expect(v.informativos.map((h) => h.regla)).toEqual(["RC7"]);
   });
 
+  it.each([
+    ["RC6", { indicador_iva: "X9" }],
+    ["RC7", { condiciones_pago: "X9" }],
+  ])("%s pide confirmación si el código informado no está en el maestro", (regla, cambios) => {
+    const v = validarPaquete(variante(cambios), maestrosReales());
+    const hallazgo = v.confirmaciones.find((h) => h.regla === regla);
+
+    expect(hallazgo?.detalle).toContain("X9");
+  });
+
   it("RC2 sugiere el centro de costo donde el aprobador sí tiene autoridad (sol-003)", () => {
     const v = validarPaquete(paqueteDe("sol-003"), maestrosReales());
     const rc2 = v.bloqueos.find((h) => h.regla === "RC2");

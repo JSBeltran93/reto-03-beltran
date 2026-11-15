@@ -8,7 +8,7 @@ import { ARCHIVOS_SALIDA, rutaSalida } from "../comun/rutas";
 import { BASE_NUMERO_OC } from "../tools/oc/constantes";
 import type { OrdenCompra } from "../tools/oc/esquemas";
 import { normalizarNit } from "../tools/oc/extractores";
-import { leerMaestros } from "../tools/oc/fixtures";
+import { leerMaestros } from "../tools/oc/insumos";
 import type { OrdenRegistrada, ProveedorSap, SapAdapter } from "./adapter";
 
 const EsquemaOrdenGuardada = z.object({
@@ -47,8 +47,12 @@ export class SapSimulado implements SapAdapter {
     );
   }
 
-  /** @inheritdoc */
-  crearOrden(orden: OrdenCompra): Promise<OrdenRegistrada> {
+  /**
+   * Crea la orden dentro de la cola de escritura.
+   * @param orden - payload validado
+   * @returns número y fecha; `existente` es true si la solicitud ya tenía una orden
+   */
+  crearOrden(orden: OrdenCompra): Promise<OrdenRegistrada & { existente: boolean }> {
     const tarea = colaEscritura.then(() => this.guardar(orden));
     colaEscritura = tarea.catch(() => undefined);
     return tarea;
@@ -72,16 +76,18 @@ export class SapSimulado implements SapAdapter {
    * Guarda la orden dentro de la cola de escritura. Si ya existe una orden para la misma
    * solicitud la devuelve sin crear otra: la idempotencia no depende del llamador.
    */
-  private guardar(orden: OrdenCompra): OrdenRegistrada {
+  private guardar(orden: OrdenCompra): OrdenRegistrada & { existente: boolean } {
     const existente = this.leerTodas().find(
       (o) => o.orden.referencia.solicitud_id === orden.referencia.solicitud_id,
     );
-    if (existente) return { numero_oc: existente.numero_oc, fecha: existente.fecha };
+    if (existente) {
+      return { numero_oc: existente.numero_oc, fecha: existente.fecha, existente: true };
+    }
     const numero_oc = String(BASE_NUMERO_OC + this.leerTodas().length + 1);
     const fecha = this.reloj.ahora().toISOString();
     mkdirSync(dirname(this.archivo), { recursive: true });
     appendFileSync(this.archivo, `${JSON.stringify({ numero_oc, fecha, orden })}\n`);
-    return { numero_oc, fecha };
+    return { numero_oc, fecha, existente: false };
   }
 
   private leerTodas(): OrdenGuardada[] {

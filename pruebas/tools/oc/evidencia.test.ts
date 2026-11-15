@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { generarEvidencia, hashEvidenciaCaso } from "../../../src/tools/oc/evidencia";
+import { generarEvidencia, huellaEvidenciaCaso } from "../../../src/tools/oc/evidencia";
 import { crearProyectoTemporal } from "../../apoyo/proyecto";
 
 describe("evidencia de aprobación", () => {
@@ -18,7 +18,7 @@ describe("evidencia de aprobación", () => {
     expect(texto).toContain("De: mlopez@periferia-ficticia.com");
     expect(texto).toContain("Asunto: RE: Solicitud de orden de compra SOL-001");
     expect(texto).toContain(`sha256: ${resultado.data.sha256}`);
-    expect(hashEvidenciaCaso(raiz, "sol-001")).toEqual({ ok: true, data: resultado.data.sha256 });
+    expect(huellaEvidenciaCaso(raiz, "sol-001")).toEqual({ ok: true, data: resultado.data.sha256 });
     expect(existsSync(path.join(raiz, resultado.data.ruta_pdf))).toBe(true);
   });
 });
