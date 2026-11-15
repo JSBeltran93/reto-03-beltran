@@ -9,7 +9,7 @@ const preparar = (deshabilitado = false) => {
   const resultado = render(
     <Compositor deshabilitado={deshabilitado} textoGuia="Escribe" alEnviar={alEnviar} />,
   );
-  return { alEnviar, resultado, campo: screen.getByLabelText("Mensaje para el agente") };
+  return { alEnviar, resultado, campo: screen.getByLabelText("Mensaje para el asistente") };
 };
 
 describe("Compositor", () => {

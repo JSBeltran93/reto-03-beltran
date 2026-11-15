@@ -9,6 +9,8 @@
  * - Una sola familia (la del sistema) y un anillo de foco común (`anillo-foco`).
  * - Un solo acento (marca); los estados usan ícono + texto además del color.
  * - Espaciado en múltiplos de 4 px; objetivos táctiles de al menos 44 px (size-11, min-h-11).
+ * - Profundidad con sombras suaves (`shadow-suave`, `shadow-elevada`), nunca bordes gruesos.
+ * - Movimiento sutil y siempre bajo `motion-safe:` (respeta prefers-reduced-motion).
  */
 
 :root {
@@ -33,6 +35,8 @@
   --info: #1d4ed8;
   --info-suave: #eff6ff;
   --anillo: #2563eb;
+  --sombra-suave: 0 1px 2px rgb(15 23 42 / 0.04), 0 2px 8px -2px rgb(15 23 42 / 0.06);
+  --sombra-elevada: 0 2px 4px rgb(15 23 42 / 0.04), 0 12px 24px -8px rgb(15 23 42 / 0.12);
 
   /* Alto fijo del encabezado: la bandeja de escritorio se pega justo debajo. */
   --alto-encabezado: 3.5rem;
@@ -64,6 +68,8 @@
     --info: #60a5fa;
     --info-suave: #0b1b3a;
     --anillo: #60a5fa;
+    --sombra-suave: 0 1px 2px rgb(0 0 0 / 0.3);
+    --sombra-elevada: 0 2px 4px rgb(0 0 0 / 0.3), 0 12px 24px -8px rgb(0 0 0 / 0.5);
   }
 }
 
@@ -93,6 +99,39 @@
   --color-info: var(--info);
   --color-info-suave: var(--info-suave);
   --color-anillo: var(--anillo);
+
+  --shadow-suave: var(--sombra-suave);
+  --shadow-elevada: var(--sombra-elevada);
+}
+
+/* Puntos del indicador "pensando": suben y se aclaran en secuencia. */
+@theme {
+  --animate-punto: punto 1.2s ease-in-out infinite;
+  --animate-aparecer: aparecer 0.25s ease-out both;
+
+  @keyframes punto {
+    0%,
+    80%,
+    100% {
+      opacity: 0.35;
+      transform: translateY(0);
+    }
+    40% {
+      opacity: 1;
+      transform: translateY(-3px);
+    }
+  }
+
+  @keyframes aparecer {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
 }
 
 /* Anillo de foco visible y consistente para todo control interactivo. */

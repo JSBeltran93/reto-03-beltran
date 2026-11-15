@@ -13,7 +13,7 @@ function ResultadoEnriquecido({ resultado }: { readonly resultado: ResultadoRico
       return (
         <section
           aria-label={TEXTOS_HERRAMIENTA.validacion}
-          className={`${CLASES.tarjeta} p-4 sm:p-5`}
+          className={`${CLASES.tarjeta} p-5 sm:p-6`}
         >
           <ResultadoValidacion datos={resultado.datos} />
         </section>
@@ -34,12 +34,14 @@ function ResultadoEnriquecido({ resultado }: { readonly resultado: ResultadoRico
 export function PasosTurno({ llamadas }: { readonly llamadas: readonly VistaLlamada[] }) {
   const resultados = llamadas.map(resultadoRico).filter((r) => r !== null);
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <section
         aria-label={TEXTOS_HERRAMIENTA.pasos}
-        className="rounded-2xl border border-borde px-4 py-3"
+        className="rounded-2xl border border-borde bg-superficie/60 px-4 py-4 sm:px-5"
       >
-        <h3 className="mb-2 text-xs font-semibold text-texto-suave">{TEXTOS_HERRAMIENTA.pasos}</h3>
+        <h3 className="mb-3 text-xs font-semibold tracking-wide text-texto-suave uppercase">
+          {TEXTOS_HERRAMIENTA.pasos}
+        </h3>
         <ol className="space-y-3">
           {llamadas.map((llamada, indice) => (
             <li key={indice}>

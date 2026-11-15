@@ -1,6 +1,7 @@
 import { type DatosCreacion, type DatosPayload, totalOrden } from "../estado/resultados";
 import { CLASES, TONOS } from "./clases";
 import { formatearFecha, formatearMonto, formatearNumero } from "./formato";
+import { IconoVerificado } from "./Iconos";
 import { TEXTOS_ORDEN } from "./textos";
 
 type Orden = DatosPayload["orden"];
@@ -90,16 +91,19 @@ function TablaPosiciones({ orden }: { readonly orden: Orden }) {
 
 function Excepciones({ orden }: { readonly orden: Orden }) {
   return (
-    <div className="px-4 py-3 text-sm sm:px-5">
+    <div className="px-4 py-4 text-sm sm:px-6">
       <h4 className="text-xs font-semibold text-texto-suave">{TEXTOS_ORDEN.campos.excepciones}</h4>
       {orden.excepciones.length === 0 ? (
         <p className="mt-1">{TEXTOS_ORDEN.sinExcepciones}</p>
       ) : (
-        <ul aria-label={TEXTOS_ORDEN.campos.excepciones} className="mt-1 space-y-1">
+        <ul aria-label={TEXTOS_ORDEN.campos.excepciones} className="mt-2 space-y-1.5">
           {orden.excepciones.map((e) => (
-            <li key={e.codigo} className={`rounded-lg px-2 py-1 ${TONOS.aviso}`}>
-              <span className="font-semibold">{e.codigo}</span> ·{" "}
+            <li
+              key={e.codigo}
+              className={`flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg px-3 py-2 ${TONOS.aviso}`}
+            >
               <span className="text-texto">{e.detalle}</span>
+              <span className={CLASES.etiquetaTecnica}>{e.codigo}</span>
             </li>
           ))}
         </ul>
@@ -118,14 +122,14 @@ export function DocumentoOrden({ datos }: { readonly datos: DatosPayload }) {
   const { orden } = datos;
   return (
     <article aria-label={TEXTOS_ORDEN.titulo} className={`${CLASES.tarjeta} overflow-hidden`}>
-      <header className="border-b border-borde bg-elevada px-4 py-3 sm:px-5">
-        <h3 className="text-base font-semibold">{TEXTOS_ORDEN.titulo}</h3>
-        <p className="text-xs text-texto-suave">
+      <header className="border-b border-borde bg-elevada px-4 py-4 sm:px-6">
+        <h3 className="text-base font-semibold tracking-tight">{TEXTOS_ORDEN.titulo}</h3>
+        <p className="mt-0.5 text-xs text-texto-suave">
           {TEXTOS_ORDEN.borrador}
           {orden.referencia && ` · ${TEXTOS_ORDEN.referencia} ${orden.referencia.solicitud_id}`}
         </p>
       </header>
-      <dl className="grid gap-x-6 gap-y-2 px-4 py-3 text-sm sm:grid-cols-2 sm:px-5">
+      <dl className="grid gap-x-6 gap-y-3 px-4 py-4 text-sm sm:grid-cols-2 sm:px-6">
         {camposCabecera(orden).map(([etiqueta, valor]) => (
           <div key={etiqueta} className="min-w-0">
             <dt className="text-xs text-texto-suave">{etiqueta}</dt>
@@ -134,9 +138,9 @@ export function DocumentoOrden({ datos }: { readonly datos: DatosPayload }) {
         ))}
       </dl>
       <TablaPosiciones orden={orden} />
-      <p className="flex items-baseline justify-between gap-3 border-b border-borde px-4 py-3 sm:px-5">
+      <p className="flex items-baseline justify-between gap-3 border-b border-borde px-4 py-4 sm:px-6">
         <span className="text-sm font-semibold">{TEXTOS_ORDEN.campos.total}</span>
-        <span className="text-xl font-semibold tabular-nums">
+        <span className="text-2xl font-semibold tracking-tight tabular-nums">
           {formatearMonto(totalOrden(datos), orden.moneda)}
         </span>
       </p>
@@ -155,9 +159,9 @@ export function TarjetaOrdenCreada({ datos }: { readonly datos: DatosCreacion })
     ? TEXTOS_ORDEN.existente(datos.numero_oc)
     : TEXTOS_ORDEN.creada(datos.numero_oc);
   return (
-    <div className={`rounded-2xl p-4 text-sm ${TONOS.exito}`}>
-      <p className="text-base font-semibold">
-        <span aria-hidden="true">✅ </span>
+    <div className={`rounded-2xl p-5 text-sm shadow-suave ${TONOS.exito}`}>
+      <p className="flex items-center gap-2 text-base font-semibold">
+        <IconoVerificado className="size-5" />
         {titulo}
       </p>
       <p className={`mt-1 ${CLASES.textoSuave}`}>
