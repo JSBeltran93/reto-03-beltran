@@ -1,12 +1,12 @@
 import { EsquemaSolicitudChat } from "@contratos/contratos-api";
 import { type KeyboardEvent, type SyntheticEvent, useEffect, useRef, useState } from "react";
 
+import { CLASES } from "./clases";
 import { TEXTOS_COMPOSITOR } from "./textos";
 
 const CLASE_TEXTO =
-  "min-h-12 flex-1 resize-none rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-brand aria-disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900";
-const CLASE_BOTON =
-  "rounded-xl bg-brand px-4 py-3 text-sm font-medium text-white hover:bg-brand-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50";
+  "anillo-foco min-h-12 flex-1 resize-none rounded-xl border border-borde-fuerte bg-superficie px-3 py-2.5 text-sm leading-6 text-texto placeholder:text-texto-suave aria-disabled:opacity-60";
+const CLASE_BOTON = `${CLASES.botonPrimario} py-3`;
 const TECLA_ENVIAR = "Enter";
 const FILAS_TEXTO = 2;
 
@@ -17,6 +17,8 @@ const LARGO_MAXIMO_MENSAJE = EsquemaSolicitudChat.shape.message.maxLength ?? und
 export interface PropiedadesCompositor {
   readonly deshabilitado: boolean;
   readonly textoGuia: string;
+  /** Id del texto de ayuda que describe el campo (atajos de teclado). */
+  readonly idAyuda?: string;
   readonly alEnviar: (texto: string) => void;
 }
 
@@ -62,7 +64,7 @@ function useCompositor({
  * @param props - acción de envío, texto guía y estado deshabilitado
  * @returns el formulario
  */
-export function Compositor({ deshabilitado, textoGuia, alEnviar }: PropiedadesCompositor) {
+export function Compositor({ deshabilitado, textoGuia, idAyuda, alEnviar }: PropiedadesCompositor) {
   const { texto, fijarTexto, campo, alPresionarTecla, alEnviarFormulario } = useCompositor({
     deshabilitado,
     alEnviar,
@@ -79,6 +81,7 @@ export function Compositor({ deshabilitado, textoGuia, alEnviar }: PropiedadesCo
         value={texto}
         readOnly={deshabilitado}
         aria-disabled={deshabilitado}
+        aria-describedby={idAyuda}
         maxLength={LARGO_MAXIMO_MENSAJE}
         placeholder={textoGuia}
         onChange={(evento) => {

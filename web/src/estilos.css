@@ -1,21 +1,106 @@
 @import "tailwindcss";
 
-@theme {
-  --color-brand: var(--color-blue-600);
-  --color-brand-strong: var(--color-blue-700);
-  --color-ok: var(--color-emerald-600);
-  --color-warn: var(--color-amber-500);
-  --color-danger: var(--color-rose-600);
-}
+/*
+ * Sistema de diseño del chat.
+ * - Colores semánticos (fondo, superficie, borde, texto, marca y estados) con valores
+ *   para tema claro y oscuro; los componentes nunca usan la paleta cruda.
+ * - Contraste AA: texto normal ≥ 4.5:1 sobre su fondo en ambos temas.
+ * - Escala tipográfica 12/14/16/20/24 (text-xs, text-sm, text-base, text-xl, text-2xl).
+ * - Una sola familia (la del sistema) y un anillo de foco común (`anillo-foco`).
+ */
 
 :root {
+  --fondo: #f8fafc;
+  --superficie: #ffffff;
+  --elevada: #f1f5f9;
+  --borde: #e2e8f0;
+  --borde-fuerte: #cbd5e1;
+  --texto: #0f172a;
+  --texto-suave: #475569;
+  --marca: #2563eb;
+  --marca-fuerte: #1d4ed8;
+  --marca-suave: #eff6ff;
+  --sobre-marca: #ffffff;
+  --exito: #047857;
+  --exito-suave: #ecfdf5;
+  --aviso: #92400e;
+  --aviso-suave: #fffbeb;
+  --aviso-borde: #f59e0b;
+  --peligro: #b91c1c;
+  --peligro-suave: #fef2f2;
+  --info: #1d4ed8;
+  --info-suave: #eff6ff;
+  --anillo: #2563eb;
+
   /* Alto reservado para el pie fijo: el desplazamiento automático no deja contenido debajo de él. */
-  --espacio-pie: 7rem;
+  --espacio-pie: 8rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fondo: #020617;
+    --superficie: #0f172a;
+    --elevada: #1e293b;
+    --borde: #1e293b;
+    --borde-fuerte: #334155;
+    --texto: #f1f5f9;
+    --texto-suave: #94a3b8;
+    --marca: #2563eb;
+    --marca-fuerte: #1d4ed8;
+    --marca-suave: #0b1b3a;
+    --sobre-marca: #ffffff;
+    --exito: #34d399;
+    --exito-suave: #022c22;
+    --aviso: #fbbf24;
+    --aviso-suave: #2a1a03;
+    --aviso-borde: #b45309;
+    --peligro: #f87171;
+    --peligro-suave: #2a0a0a;
+    --info: #60a5fa;
+    --info-suave: #0b1b3a;
+    --anillo: #60a5fa;
+  }
+}
+
+@theme inline {
+  --font-sans:
+    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  --color-fondo: var(--fondo);
+  --color-superficie: var(--superficie);
+  --color-elevada: var(--elevada);
+  --color-borde: var(--borde);
+  --color-borde-fuerte: var(--borde-fuerte);
+  --color-texto: var(--texto);
+  --color-texto-suave: var(--texto-suave);
+  --color-marca: var(--marca);
+  --color-marca-fuerte: var(--marca-fuerte);
+  --color-marca-suave: var(--marca-suave);
+  --color-sobre-marca: var(--sobre-marca);
+  --color-exito: var(--exito);
+  --color-exito-suave: var(--exito-suave);
+  --color-aviso: var(--aviso);
+  --color-aviso-suave: var(--aviso-suave);
+  --color-aviso-borde: var(--aviso-borde);
+  --color-peligro: var(--peligro);
+  --color-peligro-suave: var(--peligro-suave);
+  --color-info: var(--info);
+  --color-info-suave: var(--info-suave);
+  --color-anillo: var(--anillo);
+}
+
+/* Anillo de foco visible y consistente para todo control interactivo. */
+@utility anillo-foco {
+  &:focus-visible {
+    outline: 2px solid var(--color-anillo);
+    outline-offset: 2px;
+  }
 }
 
 @layer base {
   html {
     scroll-padding-bottom: var(--espacio-pie);
-    @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+    @apply bg-fondo font-sans text-texto antialiased;
   }
 }
