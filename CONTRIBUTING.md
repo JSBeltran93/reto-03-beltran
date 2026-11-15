@@ -8,6 +8,7 @@ Guía de desarrollo del agente de órdenes de compra (Reto 03).
 nvm use                # Node 22 (ver .nvmrc)
 npm install            # instala la raíz y el workspace web/; configura los hooks de git
 cp .env.example .env   # completar ANTHROPIC_API_KEY para usar el chat
+git config commit.template .gitmessage   # plantilla de mensajes de commit
 npm run dev            # back (tsx watch) + front (Vite) con un solo comando
 ```
 

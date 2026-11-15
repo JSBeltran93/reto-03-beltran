@@ -9,7 +9,7 @@ El PRD exige un adaptador LLM cuyo reemplazo no toque el ciclo del agente (§6.1
 
 ## Decisión
 
-Arquitectura por capas con puertos y adaptadores. El dominio (`src/tools/oc/`) es TypeScript puro, sin HTTP, LLM ni SDK. Puertos: `AdaptadorLlm` (`src/llm/adapter.ts`) y `SapAdapter` (`src/sap/adapter.ts`). Adaptadores: `AdaptadorAnthropic` (`src/llm/anthropic.ts`), el adaptador de respaldo y `SapSimulado` (`src/sap/mock.ts`). `src/server.ts` es la única raíz de composición; el SAP y el reloj se inyectan en las herramientas.
+Arquitectura por capas con puertos y adaptadores. El dominio (`src/tools/oc/`) es TypeScript puro, sin HTTP, LLM ni SDK. Puertos: `AdaptadorLlm` (`src/llm/adapter.ts`) y `SapAdapter` (`src/sap/adapter.ts`). Adaptadores: `AdaptadorAnthropic` (`src/llm/anthropic.ts`), el adaptador de respaldo y `SapSimulado` (`src/sap/mock.ts`). `src/server.ts` compone las dependencias reales del servidor; `src/tools/oc.ts` expone una instancia por defecto (SAP simulado + reloj del sistema) para `demo.ts` y `modulo/`. El SAP y el reloj se inyectan en las herramientas con la fábrica `crearHerramientasOc`.
 
 ## Consecuencias
 

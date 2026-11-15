@@ -5,11 +5,11 @@
 
 ## Contexto
 
-El PRD no exige un respaldo, pero el link público debe responder durante la defensa. Si el modelo principal agota el tiempo, alcanza su límite de solicitudes, no está disponible o rechaza una respuesta, el turno fallaría. El parámetro de respaldo del lado del servidor (`fallbacks`) no existe en la versión instalada del SDK.
+El PRD no exige un respaldo, pero el link público debe responder durante la defensa. Si el modelo principal agota el tiempo, alcanza su límite de solicitudes, no está disponible o rechaza una respuesta, el turno fallaría. El parámetro `fallbacks` del SDK existe solo en `client.beta.messages` (beta `server-side-fallback-2026-07-01`) y solo cubre rechazos del modelo, no timeouts, límites (429) ni caídas.
 
 ## Decisión
 
-`AdaptadorConRespaldo` implementa `AdaptadorLlm` envolviendo dos adaptadores: el principal (`LLM_MODELO`, `claude-opus-5-5`) y el de respaldo (`LLM_MODELO_RESPALDO`, `claude-sonnet-5-5`). Ante timeout, límite, no disponible o rechazo, el mismo turno se reintenta con el respaldo. Ante clave inválida o solicitud inválida no se reintenta, porque fallaría igual. Se compone en `src/server.ts`.
+`AdaptadorConRespaldo` implementa `AdaptadorLlm` envolviendo dos adaptadores: el principal (`LLM_MODELO`, `claude-opus-5-5`) y el de respaldo (`LLM_MODELO_RESPALDO`, `claude-sonnet-5-5`). Ante timeout, límite, no disponible o rechazo, el mismo turno se reintenta con el respaldo. Un `stop_reason: refusal` se traduce a `LLM_RECHAZO`, lo que activa el respaldo. El SDK reintenta cada llamada 1 vez (`maxRetries: 1`) antes de pasar al respaldo, para que un proveedor colgado no consuma todo el plazo del turno. Ante clave inválida o solicitud inválida no se reintenta, porque fallaría igual. Se compone en `src/server.ts`.
 
 ## Consecuencias
 
@@ -19,4 +19,5 @@ El PRD no exige un respaldo, pero el link público debe responder durante la def
 ## Alternativas consideradas
 
 - Un solo modelo: más simple, sin resiliencia.
+- `fallbacks` del servidor (API beta): solo cubre rechazos y obliga a usar la API beta.
 - Otro proveedor como respaldo: más independencia, pero requiere otra clave y otro adaptador; queda como mejora.
