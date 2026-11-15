@@ -1,10 +1,12 @@
+import type { CodigoError } from "../comun/errores";
+import { EsquemaResultadoSerializado } from "../comun/resultado";
 import type { LlamadaHerramienta } from "../llm/adapter";
 import { NOMBRES_HERRAMIENTAS } from "../tools/oc/nombres";
 import { sinTildes } from "../tools/oc/normalizar";
-import { type Ejecucion, ejecucionFallida } from "./registro-herramientas";
+import type { Ejecucion } from "./registro-herramientas";
 
-const MENSAJE_SIN_CONFIRMACION =
-  "El usuario no ha confirmado este caso. Pregunte al usuario y espere su respuesta.";
+/** Código con el que `oc_crear` indica que el caso espera la confirmación del usuario. */
+const CODIGO_REQUIERE_CONFIRMACION: CodigoError = "REQUIERE_CONFIRMACION";
 
 /** Estado de confirmación que se guarda por sesión (CA3). */
 export interface EstadoConfirmacion {
@@ -77,41 +79,77 @@ function casoDe(llamada: LlamadaHerramienta): string | null {
 }
 
 /**
- * Bloquea `oc_crear` con `confirmado=true` salvo que el usuario haya confirmado ese
- * mismo caso en su último mensaje: el modelo no puede confirmar por el usuario.
+ * Compuerta de `oc_crear` (CA3): si el modelo envía `confirmado=true` sin que el usuario
+ * haya confirmado ese mismo caso en su último mensaje, la llamada se ejecuta con
+ * `confirmado=false`. El modelo nunca confirma por el usuario y `oc_crear` revalida: si
+ * el caso tiene confirmaciones devuelve `REQUIERE_CONFIRMACION`; si no las tiene, crea la
+ * OC sin gastar otra iteración del modelo.
  * @param estado - estado de confirmación de la sesión
  * @param llamada - llamada pedida por el modelo
- * @returns ejecución fallida para el modelo y el chat, o null si la llamada se permite
+ * @returns la llamada que realmente se ejecuta (la misma, o con `confirmado=false`)
  */
 export function autorizar(
   estado: EstadoConfirmacion,
   llamada: LlamadaHerramienta,
-): Ejecucion | null {
-  const args = llamada.args as { confirmado?: unknown } | null;
-  if (llamada.nombre !== NOMBRES_HERRAMIENTAS.crear || args?.confirmado !== true) return null;
-  if (estado.otorgada !== null && estado.otorgada === casoDe(llamada)) return null;
-  return ejecucionFallida(llamada, "CONFIRMACION_NO_OTORGADA", MENSAJE_SIN_CONFIRMACION);
+): LlamadaHerramienta {
+  const args = llamada.args as Record<string, unknown> | null;
+  if (llamada.nombre !== NOMBRES_HERRAMIENTAS.crear || args?.confirmado !== true) return llamada;
+  if (estado.otorgada !== null && estado.otorgada === casoDe(llamada)) return llamada;
+  return { ...llamada, args: { ...args, confirmado: false } };
+}
+
+function agregarPendiente(estado: EstadoConfirmacion, caso: string): void {
+  estado.pendientes = [...estado.pendientes.filter((c) => c !== caso), caso];
+}
+
+function quitarPendiente(estado: EstadoConfirmacion, caso: string): void {
+  estado.pendientes = estado.pendientes.filter((c) => c !== caso);
+  if (estado.otorgada === caso) estado.otorgada = null;
+}
+
+/** true si la validación es apta y trae confirmaciones que el usuario debe aprobar. */
+function requiereConfirmacion(data: unknown): boolean {
+  const validacion = data as { apta?: unknown; confirmaciones?: unknown } | null;
+  return (
+    validacion?.apta === true &&
+    Array.isArray(validacion.confirmaciones) &&
+    validacion.confirmaciones.length > 0
+  );
+}
+
+/** Código de error del resultado serializado, o null si tuvo éxito o no se puede leer. */
+function codigoError(serializado: string): string | null {
+  try {
+    const resultado = EsquemaResultadoSerializado.safeParse(JSON.parse(serializado));
+    return resultado.success ? (resultado.data.error?.codigo ?? null) : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Actualiza los pendientes después de una llamada: un payload construido queda
- * esperando la creación (al final de la lista); una OC creada quita solo su caso.
+ * Actualiza los pendientes después de una llamada: un caso queda pendiente solo si de
+ * verdad requiere confirmación (`oc_validar` apta con confirmaciones, u `oc_crear` que
+ * devuelve `REQUIERE_CONFIRMACION`); una validación sin confirmaciones o no apta y una OC
+ * creada lo quitan.
  * @param estado - estado de confirmación de la sesión (se modifica)
  * @param llamada - llamada ejecutada
- * @param data - datos del resultado exitoso, o undefined si falló
+ * @param ejecucion - resultado de la ejecución
  */
 export function trasHerramienta(
   estado: EstadoConfirmacion,
   llamada: LlamadaHerramienta,
-  data: unknown,
+  ejecucion: Ejecucion,
 ): void {
   const caso = casoDe(llamada);
-  if (caso === null || data === undefined) return;
-  if (llamada.nombre === NOMBRES_HERRAMIENTAS.construirPayload) {
-    estado.pendientes = [...estado.pendientes.filter((c) => c !== caso), caso];
+  if (caso === null) return;
+  const exitosa = ejecucion.vista.ok;
+  if (llamada.nombre === NOMBRES_HERRAMIENTAS.validar && exitosa) {
+    if (requiereConfirmacion(ejecucion.data)) agregarPendiente(estado, caso);
+    else quitarPendiente(estado, caso);
   }
-  if (llamada.nombre === NOMBRES_HERRAMIENTAS.crear) {
-    estado.pendientes = estado.pendientes.filter((c) => c !== caso);
-    if (estado.otorgada === caso) estado.otorgada = null;
-  }
+  if (llamada.nombre !== NOMBRES_HERRAMIENTAS.crear) return;
+  if (exitosa) quitarPendiente(estado, caso);
+  else if (codigoError(ejecucion.serializado) === CODIGO_REQUIERE_CONFIRMACION)
+    agregarPendiente(estado, caso);
 }

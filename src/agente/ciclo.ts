@@ -113,8 +113,6 @@ function presupuestoAgotado(turno: Turno): boolean {
 /** Ejecuta la llamada; cualquier excepción se vuelve ERROR_INTERNO para que la sesión siga viva (CA5). */
 async function ejecutarSeguro(turno: Turno, llamada: LlamadaHerramienta): Promise<Ejecucion> {
   const { sesion, dependencias } = turno;
-  const denegada = autorizar(sesion.confirmacion, llamada);
-  if (denegada) return denegada;
   try {
     return await ejecutarLlamada(catalogoDe(dependencias), llamada, {
       directory: dependencias.raiz,
@@ -151,8 +149,15 @@ async function ejecutarHerramienta(
   llamada: LlamadaHerramienta,
 ): Promise<ResultadoHerramienta> {
   const inicio = Date.now();
-  const ejecucion = await ejecutarSeguro(turno, llamada);
-  trasHerramienta(turno.sesion.confirmacion, llamada, ejecucion.data);
+  // Se ejecuta (y se muestra en CA4) la llamada que pasó la compuerta, no la que pidió el modelo.
+  const efectiva = autorizar(turno.sesion.confirmacion, llamada);
+  if (efectiva !== llamada)
+    turno.dependencias.registrador.info("confirmacion_no_otorgada", {
+      sessionId: turno.sesion.id,
+      herramienta: llamada.nombre,
+    });
+  const ejecucion = await ejecutarSeguro(turno, efectiva);
+  trasHerramienta(turno.sesion.confirmacion, efectiva, ejecucion);
   turno.llamadas.push(ejecucion.vista);
   turno.sesion.historial.push({ tipo: "herramienta", llamada: ejecucion.vista });
   auditar(turno, ejecucion.vista, inicio);
