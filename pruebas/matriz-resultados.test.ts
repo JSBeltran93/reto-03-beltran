@@ -37,7 +37,7 @@ async function ejecutarFlujo(raiz: string, caso: string, confirmado: boolean): P
 }
 
 describe("objetivos O1–O4 del PRD sobre los seis casos", () => {
-  it("coincide con la matriz de resultados esperada (documentacion/PLAN.md §10.2)", async () => {
+  it("coincide con la matriz de resultados esperada (SOLUCION.md §5)", async () => {
     const raiz = crearProyectoTemporal();
     const resultados: Record<string, string> = {};
     for (const caso of ["sol-001", "sol-002", "sol-003", "sol-004", "sol-005", "sol-006"]) {

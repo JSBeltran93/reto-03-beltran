@@ -26,8 +26,15 @@ export interface FilaControl {
 
 const ENCABEZADO = "solicitud_id,resultado,numero_oc,retroactiva,bloqueos,confirmaciones,ts";
 
+/** Caracteres con los que una hoja de cálculo interpreta una celda como fórmula. */
+const INICIO_FORMULA = /^[=+\-@\t\r]/;
+
+/** Prefijo que neutraliza una posible fórmula al abrir el CSV en una hoja de cálculo. */
+const PREFIJO_TEXTO = "'";
+
 function celda(valor: string): string {
-  return /[",\n]/.test(valor) ? `"${valor.replace(/"/g, '""')}"` : valor;
+  const seguro = INICIO_FORMULA.test(valor) ? `${PREFIJO_TEXTO}${valor}` : valor;
+  return /[",\n]/.test(seguro) ? `"${seguro.replace(/"/g, '""')}"` : seguro;
 }
 
 /**
