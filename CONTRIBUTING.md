@@ -27,7 +27,7 @@ npm run dev            # back (tsx watch) + front (Vite) con un solo comando
 | `src/agente/`                     | Ciclo del agente, compuerta de confirmación, sesiones, registro de herramientas, bitácora                 |
 | `src/comun/`                      | Resultado, catálogo de errores, reloj, registrador, huella, contratos de la API, rutas de `out/`          |
 | `src/server.ts`                   | API HTTP (`crearAplicacion`) y raíz de composición                                                        |
-| `web/`                            | Chat en React (TanStack Query + axios); sus tests van junto a cada componente                             |
+| `web/`                            | Front chat primero en React (TanStack Query + axios); sus tests van junto a cada componente               |
 | `pruebas/`                        | Tests del back; `pruebas/dobles/` contiene el LLM falso                                                   |
 
 Reglas de dependencia: el dominio (`src/tools/oc/`) nunca importa el ciclo del agente, el adaptador LLM ni Express. `src/server.ts` es el único lugar que compone las implementaciones reales (el modelo, a través de `src/llm/fabrica.ts`).
