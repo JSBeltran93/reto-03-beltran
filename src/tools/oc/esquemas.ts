@@ -73,6 +73,23 @@ export const EsquemaPaquete = z.object({
 /** Paquete normalizado, PRD §7.2. */
 export type Paquete = z.infer<typeof EsquemaPaquete>;
 
+/**
+ * Paquete tal como lo reenvía el modelo a `oc_validar` y `oc_construir_payload`: todos
+ * los campos son opcionales porque el modelo suele omitir los adjuntos `null` (p. ej.
+ * `factura`). Las herramientas releen el caso de disco (CA2), así que el paquete
+ * recibido solo se compara con el original para avisar si difiere o viene incompleto.
+ */
+export const EsquemaPaqueteRecibido = z
+  .object({
+    correo: EsquemaPaquete.shape.correo.partial(),
+    solicitud: EsquemaSolicitud.partial(),
+    cotizacion: EsquemaPaquete.shape.cotizacion.unwrap().partial().nullable(),
+    aprobacion: EsquemaPaquete.shape.aprobacion.unwrap().partial().nullable(),
+    factura: EsquemaPaquete.shape.factura.unwrap().partial().nullable(),
+    faltantes: z.array(z.string()),
+  })
+  .partial();
+
 /** Proveedor del maestro (`proveedores.json`). */
 export const EsquemaProveedor = z.object({
   codigo_sap: z.string(),
