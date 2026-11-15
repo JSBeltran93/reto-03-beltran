@@ -17,8 +17,9 @@ export const RESPUESTAS_CONFIRMACION = {
 export const TEXTOS_COMPOSITOR = {
   etiqueta: "Mensaje para el agente",
   enviar: "Enviar",
-  normal: "Escribe un mensaje, por ejemplo: ¿por qué no se puede crear la OC de sol-002?",
-  esperandoConfirmacion: "Responde «Confirmo» o «Cancelar», o haz una pregunta…",
+  /** Textos guía cortos: deben caber en el cuadro de mensaje en pantallas de 320 px. */
+  normal: "Escribe un mensaje para el agente…",
+  esperandoConfirmacion: "Responde «Confirmo» o «Cancelar»…",
   ayuda: "Enter envía · Shift + Enter agrega una línea",
 } as const;
 
@@ -56,6 +57,8 @@ export const TEXTOS_BANDEJA = {
   cargando: "Cargando solicitudes…",
   error: "No se pudo cargar la bandeja.",
   reintentar: "Reintentar",
+  abrirConversacion: "Ir a la conversación",
+  ayudaSinBandeja: "Puedes escribirle al agente aunque la bandeja no cargue.",
   vacia: "No hay solicitudes en la bandeja.",
   volver: "Bandeja",
   procesar: "Procesar",
@@ -138,7 +141,6 @@ export const TEXTOS_ORDEN = {
 export const TEXTOS_ESTADO = {
   pensando: "El agente está trabajando…",
   reintentar: "Reintentar",
-  errorEnHistorial: "La última respuesta del agente fue un error.",
   esperaReintento: (segundos: number): string => `Podrás reintentar en ${segundos} s`,
   conversacion: "Conversación",
   agente: "Agente",

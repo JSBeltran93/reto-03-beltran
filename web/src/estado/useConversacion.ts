@@ -8,7 +8,7 @@ import { type Dispatch, useCallback, useEffect, useReducer, useState } from "rea
 
 import { ErrorApi, MENSAJES_ERROR_API } from "../api/cliente";
 import { useEnviarMensaje } from "../consultas/useEnviarMensaje";
-import { claveSesion, useSesion } from "../consultas/useSesion";
+import { claveSesion, marcarSesionNueva, useSesion } from "../consultas/useSesion";
 import {
   type AccionConversacion,
   type ErrorVisible,
@@ -16,7 +16,13 @@ import {
   estadoInicial,
   reducirConversacion,
 } from "./conversacion";
-import { guardarSesion, leerSesionGuardada, nuevoIdSesion } from "./sesion-guardada";
+import { guardarSesion, leerSesionInicial, nuevoIdSesion } from "./sesion-guardada";
+
+/** Opciones al abrir una sesión. */
+export interface OpcionesAbrirSesion {
+  /** true si la sesión se acaba de crear en el cliente: no se pide su historial al servidor. */
+  readonly nueva?: boolean;
+}
 
 /** API pública del hook de conversación. */
 export interface Conversacion {
@@ -34,10 +40,10 @@ export interface Conversacion {
   readonly nuevaSesion: () => string | null;
   /**
    * Cambia a una sesión existente o nueva y rehidrata su historial desde el servidor
-   * (no disponible mientras carga).
+   * (no disponible mientras carga). Una sesión nueva no se pide al servidor.
    * @returns true si se cambió de sesión
    */
-  readonly abrirSesion: (id: string) => boolean;
+  readonly abrirSesion: (id: string, opciones?: OpcionesAbrirSesion) => boolean;
 }
 
 /** Vuelve a leer la sesión del servidor (forma de `refetch` de TanStack Query). */
@@ -186,6 +192,7 @@ function useHidratacion(
 /**
  * Cambio de sesión: descarta la petición anterior, recuerda la sesión y olvida el historial
  * en caché para volver a pedirlo al servidor (al volver a un caso se ve su conversación al día).
+ * Si la sesión es nueva, en cambio, se marca sin historial y no se pide.
  * @param cargando - si hay una petición o un sondeo en curso (entonces no se cambia)
  * @param descartar - descarta el estado de la mutación anterior
  * @param despachar - despachador del reducer
@@ -195,14 +202,15 @@ function useAbrirSesion(
   cargando: boolean,
   descartar: () => void,
   despachar: Dispatch<AccionConversacion>,
-): (id: string) => boolean {
+): (id: string, opciones?: OpcionesAbrirSesion) => boolean {
   const clienteConsultas = useQueryClient();
   return useCallback(
-    (id: string) => {
+    (id: string, opciones?: OpcionesAbrirSesion) => {
       if (cargando) return false;
       descartar();
       guardarSesion(id);
-      clienteConsultas.removeQueries({ queryKey: claveSesion(id), exact: true });
+      if (opciones?.nueva === true) marcarSesionNueva(clienteConsultas, id);
+      else clienteConsultas.removeQueries({ queryKey: claveSesion(id), exact: true });
       despachar({ tipo: "NUEVA_SESION", sessionId: id });
       return true;
     },
@@ -216,9 +224,12 @@ function useAbrirSesion(
  * @returns estado y acciones
  */
 export function useConversacion(): Conversacion {
-  const [estado, despachar] = useReducer(reducirConversacion, undefined, () =>
-    estadoInicial(leerSesionGuardada()),
-  );
+  const clienteConsultas = useQueryClient();
+  const [estado, despachar] = useReducer(reducirConversacion, clienteConsultas, (cliente) => {
+    const { id, nueva } = leerSesionInicial();
+    if (nueva) marcarSesionNueva(cliente, id);
+    return estadoInicial(id);
+  });
   const refrescar = useHidratacion(estado, despachar);
   const { solicitar, cargando, descartar } = useSolicitud(despachar, estado.sessionId, refrescar);
 
@@ -245,7 +256,7 @@ export function useConversacion(): Conversacion {
   const abrirSesion = useAbrirSesion(cargando, descartar, despachar);
   const nuevaSesion = useCallback(() => {
     const id = nuevoIdSesion();
-    return abrirSesion(id) ? id : null;
+    return abrirSesion(id, { nueva: true }) ? id : null;
   }, [abrirSesion]);
 
   return { estado, cargando, enviar, reintentar, nuevaSesion, abrirSesion };

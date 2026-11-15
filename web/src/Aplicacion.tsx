@@ -28,10 +28,11 @@ interface PropiedadesPanelBandeja {
   readonly deshabilitado: boolean;
   readonly clases: string;
   readonly alSeleccionar: (caso: string) => void;
+  readonly alAbrirConversacion: () => void;
 }
 
 function PanelBandeja(props: PropiedadesPanelBandeja) {
-  const { casos, seleccionado, deshabilitado, clases, alSeleccionar } = props;
+  const { casos, seleccionado, deshabilitado, clases, alSeleccionar, alAbrirConversacion } = props;
   return (
     <aside aria-label={TEXTOS_BANDEJA.region} className={`${clases} ${CLASES_ASIDE}`}>
       <Bandeja
@@ -42,6 +43,7 @@ function PanelBandeja(props: PropiedadesPanelBandeja) {
         deshabilitado={deshabilitado}
         alSeleccionar={alSeleccionar}
         alReintentar={() => void casos.refetch()}
+        alAbrirConversacion={alAbrirConversacion}
       />
     </aside>
   );
@@ -69,7 +71,7 @@ export default function Aplicacion() {
   const conversacion = useConversacion();
   const salud = useSalud();
   const casos = useCasos();
-  const { casoActivo, panel, seleccionar, volver, procesar, nuevaSesion } =
+  const { casoActivo, panel, seleccionar, volver, abrirConversacion, procesar, nuevaSesion } =
     useSesionesPorCaso(conversacion);
   const paneles = clasesPaneles(panel);
   const resumenDe = useResumenDe(casos.data);
@@ -90,6 +92,7 @@ export default function Aplicacion() {
           deshabilitado={conversacion.cargando}
           clases={paneles.bandeja}
           alSeleccionar={seleccionar}
+          alAbrirConversacion={abrirConversacion}
         />
         <PanelConversacion
           conversacion={conversacion}
