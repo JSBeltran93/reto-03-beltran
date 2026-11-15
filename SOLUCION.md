@@ -12,7 +12,7 @@
 ## Resumen
 
 - El agente lee el paquete de una solicitud de compra (correo, solicitud, cotización, aprobación, factura), aplica los controles **RC1–RC10** contra los maestros, muestra la OC como quedaría en SAP y la crea en un **SAP simulado** solo cuando corresponde.
-- Las decisiones de negocio son **deterministas y viven en código**; el modelo orquesta herramientas, explica y pregunta. Por eso `demo.ts` y más de 160 tests corren sin clave.
+- Las decisiones de negocio son **deterministas y viven en código**; el modelo orquesta herramientas, explica y pregunta. Por eso `demo.ts` y más de 220 tests corren sin clave.
 - La confirmación humana (CA3) la **exige el ciclo**, no solo el prompt: el modelo no puede confirmar por el usuario ni alterar el payload validado.
 - El front (React + TanStack Query) muestra cada llamada a herramienta, la OC en tabla y una tarjeta de confirmación destacada.
 - Si el modelo principal falla, un **modelo de respaldo** atiende el turno; si ambos fallan, el usuario recibe un error claro y la sesión sigue viva.
@@ -69,12 +69,12 @@ flowchart LR
   Dominio -. escribe .-> Out[(out/: control.csv, log.jsonl, sap/ordenes.jsonl, caso/…)]
 ```
 
-| Pieza                                 | Dónde vive                                                                                                 |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| **Comportamiento** (system prompt)    | `agent/prompt.md`                                                                                          |
-| **Conocimiento** del proceso          | `src/knowledge/ordenes-compra.md`                                                                          |
-| **Ejecución** (herramientas y reglas) | `src/tools/oc.ts` + `src/tools/oc/`                                                                        |
-| Raíz de composición                   | `src/server.ts`: único lugar que conoce Anthropic, el SAP simulado, el reloj y el sistema de archivos real |
+| Pieza                                 | Dónde vive                                                                                                                                                                     |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Comportamiento** (system prompt)    | `agent/prompt.md`                                                                                                                                                              |
+| **Conocimiento** del proceso          | `src/knowledge/ordenes-compra.md`                                                                                                                                              |
+| **Ejecución** (herramientas y reglas) | `src/tools/oc.ts` + `src/tools/oc/`                                                                                                                                            |
+| Raíz de composición                   | `src/server.ts` compone las dependencias reales del servidor; `src/tools/oc.ts` expone una instancia por defecto (SAP simulado + reloj del sistema) para `demo.ts` y `modulo/` |
 
 Reglas de dependencia: el dominio no importa Express, el SDK ni el ciclo; el SAP y el reloj se inyectan con una fábrica de herramientas, así tests y demo son deterministas.
 
@@ -83,7 +83,7 @@ Reglas de dependencia: el dominio no importa Express, el SDK ni el ciclo; el SAP
 `src/agente/ciclo.ts` (`ejecutarTurno`), bucle manual de tool use:
 
 1. Toma el **candado de la sesión**: los turnos de una misma sesión se ejecutan en orden; un doble clic o un reintento nunca intercala mensajes ni rompe el par `tool_use`/`tool_result`.
-2. Registra el mensaje del usuario y actualiza la **compuerta de confirmación**: si había un caso pendiente y el mensaje empieza con una afirmación ("confirmo", "sí, procede"…), queda otorgado solo para ese caso y ese turno.
+2. Registra el mensaje del usuario y actualiza la **compuerta de confirmación**: solo una confirmación corta y completa ("confirmo", "sí, procede"…) otorga el caso pendiente más reciente, y solo para ese turno. Mensajes con reservas ("ok, pero…", "no", "todavía", "antes", "primero") no confirman. Si hay varios casos pendientes, se confirma el más reciente y la tarjeta del front muestra cuál es (`casoPendiente`).
 3. Envía la conversación al puerto LLM (`enviar`) con las 5 herramientas en JSON Schema, derivado de los mismos esquemas zod.
 4. Revisa el motivo de fin: una respuesta truncada por límite de tokens no ejecuta llamadas; un rechazo del modelo se informa con un mensaje explícito.
 5. Por cada llamada: la compuerta autoriza, el registro **valida los argumentos con zod** (si fallan, el error vuelve al modelo), se ejecuta la herramienta y se registra en `out/log.jsonl` y en el historial. Cualquier excepción se devuelve como `ERROR_INTERNO`, siempre con un resultado por llamada.
@@ -99,15 +99,21 @@ sequenceDiagram
   A->>F: "Procesa sol-004 y no la crees hasta que confirme"
   F->>C: POST /api/chat
   C->>M: enviar(mensajes, herramientas)
-  M->>H: oc_leer_paquete → oc_validar (RC5) → oc_construir_payload → oc_generar_evidencia
+  M-->>C: tool_use: oc_leer_paquete → oc_validar (RC5) → oc_construir_payload → oc_generar_evidencia
+  C->>H: ejecuta cada herramienta (args validados con zod)
   H-->>C: resultados (caso pendiente = sol-004)
+  C->>M: enviar(mensajes + resultados)
   M-->>C: tabla de la OC + "¿Confirmas?"
   C-->>F: reply + toolCalls + needsConfirmation = true
   A->>F: "Confirmo"
   F->>C: POST /api/chat
   Note over C: la compuerta otorga sol-004 solo para este turno
-  M->>H: oc_crear(confirmado = true)
+  C->>M: enviar(mensajes)
+  M-->>C: tool_use: oc_crear(confirmado = true)
+  C->>H: oc_crear (autorizado por la compuerta)
   H-->>C: numero_oc 4500000002 + ruta de evidencia
+  C->>M: enviar(mensajes + resultado)
+  M-->>C: número de OC y ruta de la evidencia
   C-->>F: reply + needsConfirmation = false
 ```
 
@@ -118,7 +124,7 @@ sequenceDiagram
 | CA3 confirmación humana    | `oc_crear` con `confirmado: true` sin confirmación del usuario devuelve `CONFIRMACION_NO_OTORGADA` ([ADR-0002](documentacion/decisiones/0002-confirmacion-en-el-ciclo.md)). `needsConfirmation` sale de ese estado, no del texto.                                       |
 | CA4 trazabilidad           | Cada llamada aparece en el chat (línea de tiempo con nombre, argumentos y resultado) y en `out/log.jsonl`.                                                                                                                                                              |
 | CA5 errores claros         | Timeouts, límites, clave inválida (`LLM_CLAVE_INVALIDA`) y solicitudes rechazadas (`LLM_SOLICITUD_INVALIDA`) se traducen a español y se registran con status y tipo (sin secretos); la respuesta lleva `esError: true`.                                                 |
-| Costo                      | Topes de tokens por sesión (`MAX_TOKENS_SESION`) y por día (`MAX_TOKENS_DIA`), límite de solicitudes por IP y sesiones desalojadas por uso reciente (LRU). Límite por IP con `MAX_SOLICITUDES_MINUTO` (429).                                                            |
+| Costo                      | Topes de tokens por sesión (`MAX_TOKENS_SESION`) y por día (`MAX_TOKENS_DIA`), límite de solicitudes por IP (`MAX_SOLICITUDES_MINUTO`, 429 con `Retry-After`) y sesiones desalojadas por uso reciente (LRU).                                                            |
 
 ## 4. Elección del modelo
 
@@ -131,44 +137,44 @@ sequenceDiagram
 
 El PRD no lo exige; se agregó porque un link público no debe depender de un solo modelo ([ADR-0006](documentacion/decisiones/0006-respaldo-del-modelo.md)).
 
-| Situación del modelo principal                         | Comportamiento                                                                                  |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| Timeout, límite de solicitudes, no disponible, rechazo | `AdaptadorConRespaldo` reintenta el mismo turno con `LLM_MODELO_RESPALDO` (`claude-sonnet-5-5`) |
-| Clave inválida o solicitud inválida                    | No se usa el respaldo (fallaría igual); error claro con su código                               |
-| Principal y respaldo fallan                            | Error claro con `esError: true`; la sesión sigue viva                                           |
-| Sin modelo en absoluto                                 | Las herramientas deterministas siguen disponibles: `npm run demo` procesa los 6 casos           |
+| Situación del modelo principal                         | Comportamiento                                                                                                                                                                                                                                  |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Timeout, límite de solicitudes, no disponible, rechazo | `AdaptadorConRespaldo` reintenta el mismo turno con `LLM_MODELO_RESPALDO` (`claude-sonnet-5-5`); un `stop_reason: refusal` se traduce a `LLM_RECHAZO` y activa el respaldo; el SDK reintenta 1 vez (`maxRetries: 1`) antes de pasar al respaldo |
+| Clave inválida o solicitud inválida                    | No se usa el respaldo (fallaría igual); error claro con su código                                                                                                                                                                               |
+| Principal y respaldo fallan                            | Error claro con `esError: true`; la sesión sigue viva                                                                                                                                                                                           |
+| Sin modelo en absoluto                                 | Las herramientas deterministas siguen disponibles: `npm run demo` procesa los 6 casos                                                                                                                                                           |
 
-El respaldo es otro adaptador del mismo puerto: el ciclo no cambia.
+El respaldo es otro adaptador del mismo puerto: el ciclo no cambia. El parámetro `fallbacks` del SDK existe solo en `client.beta.messages` (beta `server-side-fallback-2026-07-01`) y solo cubre rechazos, no timeouts, 429 ni caídas; por eso se usa un adaptador propio.
 
 ## 5. Matriz de controles
 
 Cada regla es un objeto `{id, tipo, evaluar}` en `REGLAS` (`src/tools/oc/reglas.ts`); agregar una regla no toca el motor.
 
-| Regla | Tipo                    | Implementación                                                                                                                                    | Casos                                        |
-| ----- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| RC1   | Bloqueo                 | Busca por NIT normalizado; sin NIT, por nombre normalizado (sin tildes, puntuación ni sufijo societario). Ambigüedad o inactivo también bloquean. | sol-002 bloquea; sol-006 resuelve por nombre |
-| RC2   | Bloqueo                 | Aprobación presente, con "Aprobado" como palabra (no negada) y enviada por un aprobador del centro.                                               | sol-003                                      |
-| RC3   | Bloqueo                 | `valor_total ≤ tope` del aprobador **en ese centro**; sugiere quién sí cubre el monto o escalar.                                                  | sol-003                                      |
-| RC4   | Bloqueo                 | Subárea dentro del centro; centro inexistente también bloquea.                                                                                    | Prueba sintética                             |
-| RC5   | Confirmación            | Diferencia relativa > 2 % o sin cotización; reporta **ambos valores** y el porcentaje.                                                            | sol-004 (6 %)                                |
-| RC6   | Confirmación + derivado | Sin IVA → `indicador_iva_default` del proveedor.                                                                                                  | sol-006 → C1                                 |
-| RC7   | Derivado                | Sin condiciones de pago → las del proveedor; solo informa.                                                                                        | sol-006 → Z030                               |
-| RC8   | Confirmación            | Factura anterior a la solicitud → `retroactiva = true` y marca en `out/control.csv`.                                                              | sol-005                                      |
-| RC9   | Confirmación            | Aprobación anterior a la solicitud (por día calendario).                                                                                          | Prueba sintética                             |
-| RC10  | Bloqueo                 | `abs(cantidad × valor_unitario − valor_total) > 1` bloquea.                                                                                       | Prueba sintética                             |
+| Regla | Tipo                    | Implementación                                                                                                                                                       | Casos                                        |
+| ----- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| RC1   | Bloqueo                 | Busca por NIT normalizado; sin NIT, por nombre normalizado (sin tildes, puntuación ni sufijo societario). Ambigüedad o inactivo también bloquean.                    | sol-002 bloquea; sol-006 resuelve por nombre |
+| RC2   | Bloqueo                 | Aprobación presente, con "Aprobado" como palabra (no negada en la misma oración: "No tengo objeciones. Aprobado." sí aprueba) y enviada por un aprobador del centro. | sol-003                                      |
+| RC3   | Bloqueo                 | `valor_total ≤ tope` del aprobador **en ese centro**; sugiere quién sí cubre el monto o escalar.                                                                     | sol-003                                      |
+| RC4   | Bloqueo                 | Subárea dentro del centro; centro inexistente también bloquea.                                                                                                       | Prueba sintética                             |
+| RC5   | Confirmación            | Diferencia relativa > 2 % o sin cotización; reporta **ambos valores** y el porcentaje.                                                                               | sol-004 (6 %)                                |
+| RC6   | Confirmación + derivado | Sin IVA → `indicador_iva_default` del proveedor. Un código informado que no existe en el maestro también pide confirmación.                                          | sol-006 → C1                                 |
+| RC7   | Derivado                | Sin condiciones de pago → las del proveedor; solo informa. Un código informado que no existe en el maestro pide confirmación.                                        | sol-006 → Z030                               |
+| RC8   | Confirmación            | Factura anterior a la solicitud → `retroactiva = true` y marca en `out/control.csv`.                                                                                 | sol-005                                      |
+| RC9   | Confirmación            | Aprobación anterior a la solicitud (por día calendario).                                                                                                             | Prueba sintética                             |
+| RC10  | Bloqueo                 | `abs(cantidad × valor_unitario − valor_total) > 1` bloquea.                                                                                                          | Prueba sintética                             |
 
 Resultado sobre los fixtures (verificado por `demo.ts` y `pruebas/matriz-resultados.test.ts`):
 
-| Caso    | Objetivo | Resultado                                                                                                                                                                                                 |
-| ------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| sol-001 | O1       | OC `4500000001` sin intervención; la segunda ejecución devuelve el mismo número (idempotente)                                                                                                             |
-| sol-002 | O2       | Sin OC (RC1) → "Solicitar la creación del proveedor en SAP…"                                                                                                                                              |
-| sol-003 | O2       | Sin OC (RC2, RC3) → "fvargas@periferia-ficticia.com aprueba en CC-3030 Comercial (tope 80.000.000)…; para CC-2020 aprueba rtorres@periferia-ficticia.com (tope 30.000.000)". Ningún aprobador cubre 74 M. |
-| sol-004 | O3       | Pide confirmación (26.500.000 vs 25.000.000, 6 %); tras confirmar, OC `4500000002`                                                                                                                        |
-| sol-005 | O4       | Pide confirmación (retroactiva); tras confirmar, OC `4500000003` con `retroactiva=true` en control                                                                                                        |
-| sol-006 | O3       | Pide confirmación del IVA derivado C1; condiciones Z030 derivadas                                                                                                                                         |
+| Caso    | Objetivo | Resultado                                                                                                                                                                                                            |
+| ------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| sol-001 | O1       | OC `4500000001` sin intervención; la segunda ejecución devuelve el mismo número (idempotente)                                                                                                                        |
+| sol-002 | O2       | Sin OC (RC1) → "Solicitar la creación del proveedor en SAP…"                                                                                                                                                         |
+| sol-003 | O2       | Sin OC (RC2, RC3) → "fvargas@periferia-ficticia.com aprueba en CC-3030 Comercial (tope 80.000.000)…; para CC-2020 aprueba rtorres@periferia-ficticia.com (tope 30.000.000)". Ningún aprobador de CC-2020 cubre 74 M. |
+| sol-004 | O3       | Pide confirmación (26.500.000 vs 25.000.000, 6 %); tras confirmar, OC `4500000002`                                                                                                                                   |
+| sol-005 | O4       | Pide confirmación (retroactiva); tras confirmar, OC `4500000003` con `retroactiva=true` en control                                                                                                                   |
+| sol-006 | O3       | Pide confirmación del IVA derivado C1; condiciones Z030 derivadas                                                                                                                                                    |
 
-`oc_validar` registra `pendiente` en `out/control.csv` cuando el caso es apto pero tiene confirmaciones; la trazabilidad usa el vocabulario del PRD (`solicitud`, `cotizacion`, `maestro.<nombre>`, `derivado`) y cubre todos los campos; si falta la evidencia, `oc_crear` la genera antes de crear la OC.
+`out/control.csv` no se infla: la fila `pendiente` la escribe `oc_construir_payload` (no cada `oc_validar`), las filas consecutivas idénticas de una misma `solicitud_id` se omiten y el indicador de retroactivas cuenta `solicitud_id` distintos; la trazabilidad usa el vocabulario del PRD (`solicitud`, `cotizacion`, `maestro.<nombre>`, `derivado`) y cubre todos los campos; si falta la evidencia, `oc_crear` la genera antes de crear la OC.
 
 **La más difícil:** RC2/RC3. No basta con decir "no autorizado": la regla cruza el maestro para decir dónde sí aprueba esa persona y quién cubre el monto. En sol-003 eso revela que probablemente el centro de costo está mal (la aprobación menciona "preventa").
 
@@ -181,6 +187,14 @@ Resultado sobre los fixtures (verificado por `demo.ts` y `pruebas/matriz-resulta
 | **OData `API_PURCHASEORDER_PROCESS_SRV`** (deep insert)     | S/4HANA disponible           | REST documentado, CSRF token, validaciones estándar                        |
 | **`BAPI_PO_CREATE1` vía SAP Integration Suite** (o RFC)     | ECC                          | El agente nunca habla RFC; Integration Suite lo expone como REST           |
 | **Plan B: archivo de carga masiva y "OC lista para pegar"** | La conexión no es viable aún | Se conserva validación, trazabilidad y control; solo cambia el último paso |
+
+**Recomendación:** empezar con el Plan B y migrar a OData `API_PURCHASEORDER_PROCESS_SRV` cuando se confirme S/4HANA. El Plan B entrega valor desde el primer día sin depender de una integración cuya viabilidad no está confirmada, y la migración no toca el agente: solo cambia el adaptador.
+
+**Plan B en detalle:**
+
+- **Archivo de carga masiva (CSV/LSMW)**, una fila por posición: `solicitud_id`, `sociedad`, `organizacion_compras`, `proveedor_codigo_sap`, `moneda`, `condiciones_pago`, `posicion`, `descripcion`, `cantidad`, `unidad`, `precio_neto`, `indicador_iva`, `centro_costo`, `subarea`, `aprobador`, `evidencia_sha256`. Las OC del día se cargan en un solo paso.
+- **"OC lista para pegar" para `ME21N`**: los valores campo por campo en el orden de la transacción (cabecera: proveedor, organización de compras, sociedad, condiciones de pago; posición: texto breve, cantidad, unidad, precio neto, indicador de IVA, imputación al centro de costo) más la ruta de la evidencia a adjuntar.
+- **Ahorro:** la validación de RC1–RC10, el payload, la trazabilidad y la evidencia ya están listos; la analista solo transcribe valores verificados o carga el archivo, en lugar de reunir y revisar los documentos de cada solicitud.
 
 La interfaz `SapAdapter` no cambia: se agrega `src/sap/odata.ts` (o `bapi.ts`) y se compone en `src/server.ts`.
 
@@ -205,7 +219,7 @@ La interfaz `SapAdapter` no cambia: se agrega `src/sap/odata.ts` (o `bapi.ts`) y
 
 **Idempotencia y errores parciales:**
 
-- Antes de crear, `buscarOrdenPorReferencia(solicitud_id)`; si existe, devuelve el número. En el simulador esa búsqueda ocurre dentro de la cola de escritura, así dos confirmaciones simultáneas no generan dos OC.
+- Antes de crear, `buscarOrdenPorReferencia(solicitud_id)`; si existe, devuelve el número. En el simulador esa búsqueda ocurre dentro de la cola de escritura: dos confirmaciones simultáneas no generan dos OC y la segunda responde `idempotente: true`.
 - Reintentos con espera creciente solo para errores transitorios (timeouts, 5xx), siempre precedidos de la búsqueda por referencia.
 - Si SAP crea la cabecera pero falla una posición o el adjunto, la OC quedaría en un estado nuevo `pendiente_conciliacion` (a agregar con el adaptador real), se reintenta solo el paso faltante y se avisa a la analista; nunca se crea una segunda OC.
 
@@ -215,7 +229,7 @@ Una OC creada después de la factura deja de ser un control preventivo y se vuel
 
 **Qué le diría a la dirección:**
 
-1. **Medir antes de decidir:** `out/control.csv` registra cada intento con `retroactiva`. Indicador mensual: % de OC retroactivas y monto asociado, por centro de costo y solicitante.
+1. **Medir antes de decidir:** `out/control.csv` registra cada intento con `retroactiva`; el indicador cuenta `solicitud_id` distintos, no filas. Indicador mensual: % de OC retroactivas y monto asociado, por centro de costo y solicitante.
 2. **Política "sin OC no hay pago"**, con una vía de excepción explícita: una OC retroactiva requiere aprobación de un nivel superior y queda marcada.
 3. **Segregación de funciones:** quien solicita no crea su propia OC; el agente puede detectarlo comparando solicitante y analista.
 4. **Aprobación por monto exacto:** la aprobación debe cubrir el valor a pagar (cotización), no solo el estimado.
@@ -245,7 +259,7 @@ Una OC creada después de la factura deja de ser un control preventivo y se vuel
 1. La sección 10 citada como rúbrica es "Riesgos, supuestos y preguntas abiertas" y no tiene puntaje; se priorizó lo que el PRD declara evaluado (§6).
 2. Con Node, el equivalente de `bun run demo.ts` es `npm run demo`.
 3. "Ausente" (HU-1) = adjunto declarado en `correo.adjuntos` sin su archivo normalizado; solicitud, cotización y aprobación siempre se esperan; la factura solo si se declara.
-4. "Cada intento" (HU-5): `oc_crear` registra creada, idempotente y pendiente; `oc_validar` registra bloqueada y pendiente (apto con confirmaciones).
+4. "Cada intento" (HU-5): `oc_crear` registra creada, idempotente y pendiente; `oc_validar` registra bloqueada; `oc_construir_payload` registra pendiente (apto con confirmaciones). Filas consecutivas idénticas de una misma solicitud se omiten.
 5. RC3 se evalúa contra el tope del aprobador en el centro de la solicitud; un aprobador ajeno al centro no tiene tope.
 6. Fechas comparadas por día calendario en la zona horaria del documento.
 7. `precio_unitario` = `valor_unitario` de la solicitud (IVA incluido); la conversión a neto pertenece al adaptador SAP real (§6).
@@ -253,40 +267,42 @@ Una OC creada después de la factura deja de ser un control preventivo y se vuel
 9. La unidad se infiere: "hora(s)" → `H`, "mensual/por mes" → `MES`, si no `UN`.
 10. `confirmado_por` = `sesion:<sessionId>` (sin autenticación, PRD §3.2).
 11. `faltantes`, `aviso`, `informativos`, `ruta_evidencia`, `ruta_pdf`, `ruta_trazabilidad`, `esError` y los datos de cada llamada en la respuesta del chat son extensiones; los campos del contrato del PRD se mantienen literales.
-12. Un mensaje afirmativo solo confirma el caso pendiente y solo en el turno inmediato.
+12. Una confirmación corta y completa solo confirma el caso pendiente más reciente y solo en el turno inmediato.
 13. Volumen de referencia para el costo: 40 OC al mes (el PRD solo dice "una por factura").
 
 ## 10. Cobertura
 
-| Historia / requisito | Estado          | Nota                                                                                                                                                                |
-| -------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| HU-1 Leer el paquete | Hecho           | Ausentes → `null` + `faltantes`; JSON roto o monto no numérico → error legible                                                                                      |
-| HU-2 Validar         | Hecho           | RC1–RC10, derivados informados                                                                                                                                      |
-| HU-3 Payload         | Hecho           | Esquema zod del PRD y `trazabilidad.json` con el vocabulario de fuentes del PRD                                                                                     |
-| HU-4 Evidencia       | Hecho (P0 y P1) | `aprobacion.txt` con sha256 y `aprobacion.pdf`                                                                                                                      |
-| HU-5 Crear OC        | Hecho           | 4500000001+, `ordenes.jsonl`, idempotencia dentro de la cola de escritura, fila por intento (incluye pendientes), protección contra inyección de fórmulas en el CSV |
-| HU-6 Errores         | Hecho           | Catálogo de códigos con acción sugerida; API con 400, 413 y 404                                                                                                     |
-| Front (PRD §6.1)     | Hecho           | Línea de tiempo de llamadas con datos, tabla de la OC, tarjeta de confirmación, tokens de diseño, rehidratación del historial, sin carreras ni doble envío          |
-| Operación            | Hecho           | Respaldo del modelo, plazo por turno, límite por IP, sesiones LRU, cabeceras de seguridad (CSP, HSTS), SAP y reloj inyectables                                      |
-| `oc_leer_excel` (P1) | No hecho        | Los fixtures traen la solicitud como JSON                                                                                                                           |
-| Bonus `modulo/`      | Hecho           | `agent.md`, `tools/oc.ts` (re-exporta las mismas herramientas) y `skill/ordenes-compra/SKILL.md`; un test impide que diverjan                                       |
+| Historia / requisito | Estado          | Nota                                                                                                                       | Falta para producción                              |
+| -------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| HU-1 Leer el paquete | Hecho           | Ausentes → `null` + `faltantes`; JSON roto o monto no numérico → error legible                                             | Lectura real de `.xlsx`, PDF y del buzón de correo |
+| HU-2 Validar         | Hecho           | RC1–RC10, derivados informados; códigos de IVA y pago verificados contra los maestros                                      | Maestros consultados en SAP en tiempo real         |
+| HU-3 Payload         | Hecho           | Esquema zod del PRD y `trazabilidad.json` con el vocabulario de fuentes del PRD                                            | Conversión a precio neto en el adaptador SAP real  |
+| HU-4 Evidencia       | Hecho (P0 y P1) | `aprobacion.txt` con sha256 y `aprobacion.pdf`                                                                             | Firma digital y adjunto vía Attachment Service     |
+| HU-5 Crear OC        | Hecho           | 4500000001+, `ordenes.jsonl`, idempotencia atómica (`idempotente: true` también en concurrencia), control sin inflación    | Adaptador SAP real y persistencia en base de datos |
+| HU-6 Errores         | Hecho           | Catálogo de códigos con acción sugerida; API con 400, 413, 404, 429 y 500 genérico                                         | Alertas y monitoreo centralizado                   |
+| Front (PRD §6.1)     | Hecho           | Línea de tiempo de llamadas, tabla de la OC con total y excepciones, tarjeta de confirmación con el caso, rehidratación    | Autenticación de usuarios                          |
+| Operación            | Hecho           | Respaldo del modelo, plazo por turno, límite por IP, sesiones LRU, CSP y HSTS, SAP y reloj inyectables                     | Volumen persistente o base de datos para `out/`    |
+| `oc_leer_excel` (P1) | No hecho        | Los fixtures traen la solicitud como JSON                                                                                  | Implementar la lectura de `.xlsx`                  |
+| Bonus `modulo/`      | Hecho           | `agent.md`, `tools/oc.ts` (exporta solo las 5 herramientas) y `skill/ordenes-compra/SKILL.md`; un test impide divergencias | Empaquetarlo sin depender de `../../src`           |
 
-**Para producción falta:** lectura de Excel/PDF reales y del buzón, autenticación y roles, persistencia en base de datos, adaptador SAP real, firma digital de la aprobación y monitoreo de costo con alertas.
+**Para producción falta además:** autenticación y roles, y monitoreo de costo con alertas.
+
+**Mejoras de la ronda final de auditoría (implementadas):** compuerta CA3 que solo acepta confirmaciones cortas y completas; varios casos pendientes con el más reciente como confirmable; `control.csv` sin inflación; idempotencia concurrente que responde `idempotente: true`; RC6/RC7 verifican el código informado contra el maestro; negación de RC2 limitada a la misma oración. En el front: consulta periódica del historial tras un timeout, total y excepciones en la tabla de la OC, fecha formateada, sin imágenes remotas en el Markdown, cuenta regresiva de `Retry-After`, contenedor accesible del historial y bordes con contraste ≥ 3:1. `src/tools/oc/fixtures.ts` pasó a llamarse `insumos.ts`.
 
 ## 11. Uso de IA
 
 Asistente: **Claude Code (modelo Claude Opus 5.5)**, en terminal y VS Code. Todo el código fue revisado y se puede explicar línea por línea.
 
-| Momento              | Tarea                                                                           | Qué se aceptó                                                                                                                      | Qué se descartó o corrigió y por qué                                                             |
-| -------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Antes del reloj      | Análisis de los 3 retos y elección del reto 3                                   | Hallazgos de fixtures: sol-003 (centro de costo), sol-004 (aprobado por 25 M), sol-005 (segregación de funciones)                  | Un primer plan imponía stack y API distintos al PRD; se rehízo anclado al PRD                    |
-| Antes del reloj      | Ensayo de los comandos de armado                                                | Detectó TypeScript 7 y ESLint 10 incompatibles con el lint con tipos y de accesibilidad                                            | Se descartó oxlint (sin reglas con tipos) a favor de ESLint 9                                    |
-| Bloques 0–3          | Andamiaje por comandos, dominio, reglas, payload, evidencia, SAP simulado, demo | Reglas como objetos (abierto/cerrado) y revalidación en el servidor                                                                | —                                                                                                |
-| Bloque 4             | Puerto LLM, ciclo, compuerta de confirmación, API                               | Compuerta CA3 en el ciclo; LLM falso para probar sin clave                                                                         | El parámetro `fallbacks` no existe en el SDK instalado; se resolvió con un adaptador de respaldo |
-| Bloque 5             | Front de chat                                                                   | TanStack Query + axios a pedido del usuario                                                                                        | Se reemplazó el reducer con `fetch` de la primera versión                                        |
-| Convención de idioma | Alineación con el PRD                                                           | Todo el código en español salvo los nombres que el PRD fija                                                                        | Una versión intermedia en inglés se descartó; el historial se rehízo limpio                      |
-| Paralelismo          | Agentes en paralelo para back, front y documentación                            | Cada parte verificada con `npm run check` y la demo                                                                                | —                                                                                                |
-| Auditoría            | 4 auditorías en paralelo (PRD, back, front, documentación) y correcciones       | Cierre por tope con `tool_choice: none`, sesión que no se rompe, candado por sesión, idempotencia atómica, rehidratación del front | Documentos con datos personales o desactualizados se eliminaron (plan previo, copia del PRD)     |
+| Momento              | Tarea                                                                           | Qué se aceptó                                                                                                                      | Qué se descartó o corrigió y por qué                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Antes del reloj      | Análisis de los 3 retos y elección del reto 3                                   | Hallazgos de fixtures: sol-003 (centro de costo), sol-004 (aprobado por 25 M), sol-005 (segregación de funciones)                  | Un primer plan imponía stack y API distintos al PRD; se rehízo anclado al PRD                                            |
+| Antes del reloj      | Ensayo de los comandos de armado                                                | Detectó TypeScript 7 y ESLint 10 incompatibles con el lint con tipos y de accesibilidad                                            | Se descartó oxlint (sin reglas con tipos) a favor de ESLint 9                                                            |
+| Bloques 0–3          | Andamiaje por comandos, dominio, reglas, payload, evidencia, SAP simulado, demo | Reglas como objetos (abierto/cerrado) y revalidación en el servidor                                                                | —                                                                                                                        |
+| Bloque 4             | Puerto LLM, ciclo, compuerta de confirmación, API                               | Compuerta CA3 en el ciclo; LLM falso para probar sin clave                                                                         | El `fallbacks` del SDK solo existe en la API beta y solo cubre rechazos; se resolvió con un adaptador de respaldo propio |
+| Bloque 5             | Front de chat                                                                   | TanStack Query + axios a pedido del usuario                                                                                        | Se reemplazó el reducer con `fetch` de la primera versión                                                                |
+| Convención de idioma | Alineación con el PRD                                                           | Todo el código en español salvo los nombres que el PRD fija                                                                        | Una versión intermedia en inglés se descartó; el historial se rehízo limpio                                              |
+| Paralelismo          | Agentes en paralelo para back, front y documentación                            | Cada parte verificada con `npm run check` y la demo                                                                                | —                                                                                                                        |
+| Auditoría            | 4 auditorías en paralelo (PRD, back, front, documentación) y correcciones       | Cierre por tope con `tool_choice: none`, sesión que no se rompe, candado por sesión, idempotencia atómica, rehidratación del front | Documentos con datos personales o desactualizados se retiraron del árbol (plan previo, copia del PRD)                    |
 
 ## 12. Riesgos y mitigación
 
@@ -303,7 +319,7 @@ Asistente: **Claude Code (modelo Claude Opus 5.5)**, en terminal y VS Code. Todo
 
 ### Plan de despliegue y operación
 
-- **Railway** con configuración como código (`railway.json`): build `npm ci --include=dev && npm run build`, arranque `npm start`, health check en `/api/health` ([ADR-0007](documentacion/decisiones/0007-despliegue-en-railway.md)).
+- **Railway** con configuración como código (`railway.json`): build por defecto de Railpack (instala dependencias y ejecuta `npm run build`), arranque `npm start`, health check en `/api/health` ([ADR-0007](documentacion/decisiones/0007-despliegue-en-railway.md)).
 - **Variables:** `ANTHROPIC_API_KEY` (solo en Railway, nunca en el repo), `LLM_MODELO`, `LLM_MODELO_RESPALDO`, topes y límites de `.env.example`; `PORT` lo asigna Railway.
 - **Despliegue:** un push a `develop` despliega; alternativa equivalente con `railway up` desde la terminal o el CI.
 - **Verificación:** `/api/health` y el prompt del PRD §11 en el link público.

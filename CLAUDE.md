@@ -20,7 +20,7 @@ Reglas para cualquier sesión de Claude Code que trabaje en este repositorio.
 - `src/tools/oc.ts` es una capa delgada: valida, llama al dominio y serializa; sin reglas propias.
 - `src/agente/` solo conoce el puerto `AdaptadorLlm` (`src/llm/adapter.ts`).
 - `src/server.ts` exporta `crearAplicacion` (sin escuchar) y es la raíz de composición.
-- `demo.ts` importa solo `src/tools/oc.ts`.
+- `demo.ts` obtiene las herramientas solo de `src/tools/oc.ts`; los tipos y las rutas los importa aparte. `src/server.ts` compone las dependencias reales del servidor; `src/tools/oc.ts` expone una instancia por defecto (SAP simulado + reloj del sistema) para `demo.ts` y `modulo/`.
 - Comportamiento: `agent/prompt.md` · Conocimiento: `src/knowledge/` · Ejecución: `src/tools/`.
 
 ## Contratos que no se cambian (PRD)
