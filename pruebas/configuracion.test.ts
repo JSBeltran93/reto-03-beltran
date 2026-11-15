@@ -4,12 +4,12 @@ import { cargarConfiguracion, VALORES_POR_DEFECTO } from "../src/configuracion";
 
 describe("cargarConfiguracion", () => {
   it("usa los valores por defecto, incluido el modelo de respaldo", () => {
-    const config = cargarConfiguracion({});
+    const configuracion = cargarConfiguracion({});
 
-    expect(config.LLM_MODELO).toBe(VALORES_POR_DEFECTO.modelo);
-    expect(config.LLM_MODELO_RESPALDO).toBe(VALORES_POR_DEFECTO.modeloRespaldo);
-    expect(config.MAX_SEGUNDOS_TURNO).toBe(VALORES_POR_DEFECTO.maxSegundosTurno);
-    expect(config.ANTHROPIC_API_KEY).toBe("");
+    expect(configuracion.LLM_MODELO).toBe(VALORES_POR_DEFECTO.modelo);
+    expect(configuracion.LLM_MODELO_RESPALDO).toBe(VALORES_POR_DEFECTO.modeloRespaldo);
+    expect(configuracion.MAX_SEGUNDOS_TURNO).toBe(VALORES_POR_DEFECTO.maxSegundosTurno);
+    expect(configuracion.ANTHROPIC_API_KEY).toBe("");
   });
 
   it("convierte números desde texto", () => {

@@ -65,8 +65,8 @@ describe("ciclo del agente", () => {
 
   it("bloquea la autoconfirmación y crea la OC solo después de que el usuario confirma", async () => {
     const llm = new LlmFalso(guionHastaPregunta());
-    const deps = dependenciasCiclo(llm, crearProyectoTemporal());
-    await ejecutarTurno(deps, "s1", "Procesa sol-004 y no la crees hasta que confirme");
+    const dependencias = dependenciasCiclo(llm, crearProyectoTemporal());
+    await ejecutarTurno(dependencias, "s1", "Procesa sol-004 y no la crees hasta que confirme");
     const payload = payloadConstruido(llm);
 
     llm.guion.push(
@@ -76,7 +76,7 @@ describe("ciclo del agente", () => {
       }),
       respuestaTexto("Intenté crearla."),
     );
-    const sinConfirmar = await ejecutarTurno(deps, "s1", "¿Qué pasó con el proveedor?");
+    const sinConfirmar = await ejecutarTurno(dependencias, "s1", "¿Qué pasó con el proveedor?");
     expect(sinConfirmar.toolCalls[0]?.resumen).toContain("CONFIRMACION_NO_OTORGADA");
 
     llm.guion.push(
@@ -86,7 +86,7 @@ describe("ciclo del agente", () => {
       }),
       respuestaTexto("OC creada."),
     );
-    const confirmada = await ejecutarTurno(deps, "s1", "Confirmo");
+    const confirmada = await ejecutarTurno(dependencias, "s1", "Confirmo");
     expect(confirmada.toolCalls[0]).toMatchObject({ ok: true, resumen: "OC 4500000001" });
     expect(confirmada.needsConfirmation).toBe(false);
   });
@@ -128,14 +128,14 @@ describe("ciclo del agente", () => {
       fallo("LLM_TIMEOUT", "El modelo tardó demasiado."),
       respuestaTexto("Hola de nuevo"),
     ]);
-    const deps = dependenciasCiclo(llm, crearProyectoTemporal());
+    const dependencias = dependenciasCiclo(llm, crearProyectoTemporal());
 
-    const primero = await ejecutarTurno(deps, "s1", "hola");
-    const segundo = await ejecutarTurno(deps, "s1", "¿sigues ahí?");
+    const primero = await ejecutarTurno(dependencias, "s1", "hola");
+    const segundo = await ejecutarTurno(dependencias, "s1", "¿sigues ahí?");
 
     expect(primero.reply).toBe("El modelo tardó demasiado.");
     expect(segundo.reply).toBe("Hola de nuevo");
-    expect(deps.sesiones.obtener("s1")?.historial.map((e) => e.tipo)).toEqual([
+    expect(dependencias.sesiones.obtener("s1")?.historial.map((e) => e.tipo)).toEqual([
       "usuario",
       "error",
       "usuario",
@@ -145,10 +145,10 @@ describe("ciclo del agente", () => {
 
   it("no llama al modelo si se agotó el presupuesto de la sesión", async () => {
     const llm = new LlmFalso([respuestaTexto("no debería llamarse")]);
-    const deps = dependenciasCiclo(llm, crearProyectoTemporal(), { maxTokensSesion: 1 });
-    deps.sesiones.obtenerOCrear("s1").tokensUsados = 5;
+    const dependencias = dependenciasCiclo(llm, crearProyectoTemporal(), { maxTokensSesion: 1 });
+    dependencias.sesiones.obtenerOCrear("s1").tokensUsados = 5;
 
-    const r = await ejecutarTurno(deps, "s1", "hola");
+    const r = await ejecutarTurno(dependencias, "s1", "hola");
 
     expect(r.reply).toContain("presupuesto");
     expect(llm.peticiones).toHaveLength(0);

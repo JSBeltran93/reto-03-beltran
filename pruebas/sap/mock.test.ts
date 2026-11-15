@@ -63,6 +63,7 @@ describe("SapSimulado", () => {
     const [a, b] = await Promise.all([sap.crearOrden(orden), sap.crearOrden(orden)]);
 
     expect(a.numero_oc).toBe(b.numero_oc);
+    expect([a.existente, b.existente]).toEqual([false, true]);
     const lineas = readFileSync(path.join(raiz, "out/sap/ordenes.jsonl"), "utf8")
       .trim()
       .split("\n");

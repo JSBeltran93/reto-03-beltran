@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -97,5 +97,35 @@ describe("oc_crear", () => {
     const r = (await crearOrden(raiz, "sol-001", payload)) as { data: { ruta_evidencia: string } };
 
     expect(existsSync(path.join(raiz, r.data.ruta_evidencia))).toBe(true);
+  });
+  it("construir_payload deja la solicitud como pendiente una sola vez y crear la marca creada", async () => {
+    const raiz = crearProyectoTemporal();
+    await payloadDe(raiz, "sol-004");
+    const payload = await payloadDe(raiz, "sol-004");
+    await crearOrden(raiz, "sol-004", payload, true);
+
+    const lineas = readFileSync(path.join(raiz, "out", "control.csv"), "utf8")
+      .trim()
+      .split("\n");
+
+    expect(lineas).toHaveLength(3);
+    expect(lineas[1]).toMatch(/^SOL-2026-004,pendiente,,false,,RC5,/);
+    expect(lineas[2]).toMatch(/^SOL-2026-004,creada,4500000001,false,,RC5,/);
+  });
+
+  it("dos creaciones simultáneas del mismo caso dan una creada y una idempotente", async () => {
+    const raiz = crearProyectoTemporal();
+    const payload = await payloadDe(raiz, "sol-001");
+
+    const respuestas = (await Promise.all([
+      crearOrden(raiz, "sol-001", payload),
+      crearOrden(raiz, "sol-001", payload),
+    ])) as { data: { numero_oc: string; idempotente: boolean } }[];
+
+    expect(respuestas.map((r) => r.data.numero_oc)).toEqual(["4500000001", "4500000001"]);
+    expect(respuestas.map((r) => r.data.idempotente).sort()).toEqual([false, true]);
+    const control = readFileSync(path.join(raiz, "out", "control.csv"), "utf8");
+    expect(control).toContain("SOL-2026-001,creada,4500000001");
+    expect(control).toContain("SOL-2026-001,idempotente,4500000001");
   });
 });

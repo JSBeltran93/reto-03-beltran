@@ -40,6 +40,9 @@ describe("contieneAprobado con negaciones a distancia", () => {
     ["No está aprobado todavía", false],
     ["Aún no ha sido aprobado por gerencia", false],
     ["Aprobado. No olvides adjuntar la factura", true],
+    ["No tengo objeciones. Aprobado.", true],
+    ["No hay problema, aprobado", true],
+    ["no está aprobado", false],
   ])("evalúa %j", (texto, esperado) => {
     expect(contieneAprobado(texto)).toBe(esperado);
   });

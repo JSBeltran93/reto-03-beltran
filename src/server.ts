@@ -1,5 +1,5 @@
 /**
- * API HTTP del agente (PRD §6.4) y punto de entrada. `crearAplicacion` arma la app sin
+ * API HTTP del agente (PRD §6.4) y punto de entrada. `crearAplicacion` arma la aplicacion sin
  * escuchar (se prueba con supertest); al ejecutarse directamente, este archivo
  * compone las dependencias reales (Anthropic, sesiones, prompt) y levanta el servidor.
  */
@@ -9,6 +9,7 @@ import { pathToFileURL } from "node:url";
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 
 import { type DependenciasCiclo, ejecutarTurno } from "./agente/ciclo";
+import { casoPendiente } from "./agente/confirmacion";
 import { cargarPromptSistema } from "./agente/prompt-sistema";
 import { catalogoOc } from "./agente/registro-herramientas";
 import { AlmacenSesiones } from "./agente/sesiones";
@@ -74,9 +75,9 @@ function cabecerasSeguridad(_req: Request, res: Response, next: NextFunction): v
   next();
 }
 
-function limitarChat(deps: DependenciasAplicacion) {
+function limitarChat(dependencias: DependenciasAplicacion) {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const espera = deps.limitador?.registrar(req.ip ?? "desconocida") ?? 0;
+    const espera = dependencias.limitador?.registrar(req.ip ?? "desconocida") ?? 0;
     if (espera === 0) {
       next();
       return;
@@ -86,36 +87,41 @@ function limitarChat(deps: DependenciasAplicacion) {
   };
 }
 
-function rutasApi(app: Express, deps: DependenciasAplicacion): void {
-  app.get(RUTAS_API.salud, (_req, res) => {
+function rutasApi(aplicacion: Express, dependencias: DependenciasAplicacion): void {
+  aplicacion.get(RUTAS_API.salud, (_req, res) => {
     const salud: Salud = {
       ok: true,
-      provider: deps.ciclo.llm.proveedor,
-      model: deps.ciclo.llm.modelo,
+      provider: dependencias.ciclo.llm.proveedor,
+      model: dependencias.ciclo.llm.modelo,
     };
     res.json(salud);
   });
 
-  app.post(RUTAS_API.chat, limitarChat(deps), async (req, res) => {
+  aplicacion.post(RUTAS_API.chat, limitarChat(dependencias), async (req, res) => {
     const cuerpo = EsquemaSolicitudChat.safeParse(req.body);
     if (!cuerpo.success) {
       res.status(HTTP.solicitudInvalida).json({ error: MENSAJES_HTTP.solicitudInvalida });
       return;
     }
-    res.json(await ejecutarTurno(deps.ciclo, cuerpo.data.sessionId, cuerpo.data.message));
+    res.json(await ejecutarTurno(dependencias.ciclo, cuerpo.data.sessionId, cuerpo.data.message));
   });
 
-  app.get(RUTAS_API.sesionPatron, (req, res) => {
-    const sesion = deps.ciclo.sesiones.obtener(req.params.id);
+  aplicacion.get(RUTAS_API.sesionPatron, (req, res) => {
+    const sesion = dependencias.ciclo.sesiones.obtener(req.params.id);
     if (!sesion) {
       res.status(HTTP.noEncontrado).json({ error: MENSAJES_HTTP.sesionNoEncontrada });
       return;
     }
-    const vista: VistaSesion = { id: sesion.id, historial: sesion.historial };
+    const vista: VistaSesion = {
+      id: sesion.id,
+      historial: sesion.historial,
+      needsConfirmation: sesion.confirmacion.pendientes.length > 0,
+      casoPendiente: casoPendiente(sesion.confirmacion),
+    };
     res.json(vista);
   });
 
-  app.all(RUTAS_API.desconocidaPatron, (_req, res) => {
+  aplicacion.all(RUTAS_API.desconocidaPatron, (_req, res) => {
     res.status(HTTP.noEncontrado).json({ error: MENSAJES_HTTP.rutaNoEncontrada });
   });
 }
@@ -130,14 +136,14 @@ function estadoErrorCliente(err: unknown): number | null {
     : null;
 }
 
-function manejarError(deps: DependenciasAplicacion) {
+function manejarError(dependencias: DependenciasAplicacion) {
   return (err: unknown, _req: Request, res: Response, _next: NextFunction): void => {
     const estadoCliente = estadoErrorCliente(err);
     if (estadoCliente !== null) {
       res.status(estadoCliente).json({ error: MENSAJES_HTTP.errorCliente });
       return;
     }
-    deps.ciclo.registrador.error("error_http", {
+    dependencias.ciclo.registrador.error("error_http", {
       tipo: err instanceof Error ? err.constructor.name : "desconocido",
     });
     res.status(HTTP.errorInterno).json({ error: MENSAJES_HTTP.errorInterno });
@@ -146,75 +152,75 @@ function manejarError(deps: DependenciasAplicacion) {
 
 /**
  * Construye la aplicación Express: rutas de la API (PRD §6.4) y el front estático.
- * @param deps - dependencias del ciclo y carpeta de estáticos
+ * @param dependencias - dependencias del ciclo y carpeta de estáticos
  * @returns la aplicación configurada (sin escuchar)
  */
-export function crearAplicacion(deps: DependenciasAplicacion): Express {
-  const app = express();
-  app.disable("x-powered-by");
-  app.set("trust proxy", PROXIES_CONFIABLES);
-  app.use(cabecerasSeguridad);
-  app.use(express.json({ limit: LIMITE_CUERPO_JSON }));
-  rutasApi(app, deps);
-  app.use(express.static(deps.carpetaEstaticos));
-  app.get("/{*splat}", (_req, res) => {
-    res.sendFile(path.join(deps.carpetaEstaticos, "index.html"));
+export function crearAplicacion(dependencias: DependenciasAplicacion): Express {
+  const aplicacion = express();
+  aplicacion.disable("x-powered-by");
+  aplicacion.set("trust proxy", PROXIES_CONFIABLES);
+  aplicacion.use(cabecerasSeguridad);
+  aplicacion.use(express.json({ limit: LIMITE_CUERPO_JSON }));
+  rutasApi(aplicacion, dependencias);
+  aplicacion.use(express.static(dependencias.carpetaEstaticos));
+  aplicacion.get("/{*splat}", (_req, res) => {
+    res.sendFile(path.join(dependencias.carpetaEstaticos, "index.html"));
   });
-  app.use(manejarError(deps));
-  return app;
+  aplicacion.use(manejarError(dependencias));
+  return aplicacion;
 }
 
 /**
  * Modelo principal con respaldo: si el principal no está disponible, responde el de respaldo.
- * @param config - configuración validada
+ * @param configuracion - configuración validada
  * @returns adaptador LLM compuesto
  */
-function crearLlm(config: ReturnType<typeof cargarConfiguracion>): AdaptadorLlm {
+function crearLlm(configuracion: ReturnType<typeof cargarConfiguracion>): AdaptadorLlm {
   const anthropic = (modelo: string): AdaptadorLlm =>
     new AdaptadorAnthropic({
-      apiKey: config.ANTHROPIC_API_KEY,
+      apiKey: configuracion.ANTHROPIC_API_KEY,
       modelo,
-      timeoutMs: config.LLM_TIMEOUT_MS,
+      timeoutMs: configuracion.LLM_TIMEOUT_MS,
     });
   return new AdaptadorConRespaldo(
-    [anthropic(config.LLM_MODELO), anthropic(config.LLM_MODELO_RESPALDO)],
+    [anthropic(configuracion.LLM_MODELO), anthropic(configuracion.LLM_MODELO_RESPALDO)],
     registradorJson,
   );
 }
 
 /** Compone las dependencias reales y levanta el servidor (raíz de composición). */
 function iniciar(): void {
-  const config = cargarConfiguracion();
+  const configuracion = cargarConfiguracion();
   const raiz = process.cwd();
   const herramientas = crearHerramientasOc({
     crearSap: (raizCaso) => new SapSimulado(raizCaso, relojSistema),
     reloj: relojSistema,
   });
-  const app = crearAplicacion({
+  const aplicacion = crearAplicacion({
     carpetaEstaticos: path.join(raiz, "web", "dist"),
-    limitador: new LimitadorSolicitudes(config.MAX_SOLICITUDES_MINUTO, relojSistema),
+    limitador: new LimitadorSolicitudes(configuracion.MAX_SOLICITUDES_MINUTO, relojSistema),
     ciclo: {
-      llm: crearLlm(config),
+      llm: crearLlm(configuracion),
       sesiones: new AlmacenSesiones({
-        maxSesiones: config.MAX_SESIONES,
-        maxTokensDia: config.MAX_TOKENS_DIA,
+        maxSesiones: configuracion.MAX_SESIONES,
+        maxTokensDia: configuracion.MAX_TOKENS_DIA,
       }),
       promptSistema: cargarPromptSistema(raiz),
       raiz,
       reloj: relojSistema,
       registrador: registradorJson,
-      maxIteraciones: config.MAX_ITERACIONES,
-      maxTokensSesion: config.MAX_TOKENS_SESION,
-      maxSegundosTurno: config.MAX_SEGUNDOS_TURNO,
+      maxIteraciones: configuracion.MAX_ITERACIONES,
+      maxTokensSesion: configuracion.MAX_TOKENS_SESION,
+      maxSegundosTurno: configuracion.MAX_SEGUNDOS_TURNO,
       catalogo: catalogoOc(herramientas),
     },
   });
-  app.listen(config.PORT, () => {
+  aplicacion.listen(configuracion.PORT, () => {
     registradorJson.info("servidor_iniciado", {
-      puerto: config.PORT,
-      modelo: config.LLM_MODELO,
-      modeloRespaldo: config.LLM_MODELO_RESPALDO,
-      claveConfigurada: config.ANTHROPIC_API_KEY !== "",
+      puerto: configuracion.PORT,
+      modelo: configuracion.LLM_MODELO,
+      modeloRespaldo: configuracion.LLM_MODELO_RESPALDO,
+      claveConfigurada: configuracion.ANTHROPIC_API_KEY !== "",
     });
   });
 }

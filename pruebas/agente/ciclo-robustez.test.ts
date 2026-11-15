@@ -28,10 +28,10 @@ describe("robustez del ciclo del agente (CA5)", () => {
       (mensajes) => respuestaTexto(JSON.stringify(ultimoResultado(mensajes))),
       respuestaTexto("Sigo aquí."),
     ]);
-    const deps = dependenciasCiclo(llm, crearProyectoTemporal());
+    const dependencias = dependenciasCiclo(llm, crearProyectoTemporal());
 
-    const primero = await ejecutarTurno(deps, "s1", "procesa sol-001");
-    const segundo = await ejecutarTurno(deps, "s1", "¿sigues?");
+    const primero = await ejecutarTurno(dependencias, "s1", "procesa sol-001");
+    const segundo = await ejecutarTurno(dependencias, "s1", "¿sigues?");
 
     expect(primero.toolCalls[0]?.resumen).toContain("ERROR_INTERNO");
     expect(primero.reply).toContain("ERROR_INTERNO");
@@ -54,15 +54,15 @@ describe("robustez del ciclo del agente (CA5)", () => {
 
   it("ejecuta en orden dos turnos simultáneos de la misma sesión", async () => {
     const llm = new LlmFalso([respuestaTexto("uno"), respuestaTexto("dos")]);
-    const deps = dependenciasCiclo(llm, crearProyectoTemporal());
+    const dependencias = dependenciasCiclo(llm, crearProyectoTemporal());
 
     const [a, b] = await Promise.all([
-      ejecutarTurno(deps, "s1", "primero"),
-      ejecutarTurno(deps, "s1", "segundo"),
+      ejecutarTurno(dependencias, "s1", "primero"),
+      ejecutarTurno(dependencias, "s1", "segundo"),
     ]);
 
     expect([a.reply, b.reply]).toEqual(["uno", "dos"]);
-    expect(deps.sesiones.obtener("s1")?.historial.map((e) => e.tipo)).toEqual([
+    expect(dependencias.sesiones.obtener("s1")?.historial.map((e) => e.tipo)).toEqual([
       "usuario",
       "asistente",
       "usuario",
@@ -99,9 +99,9 @@ describe("plazo máximo del turno", () => {
           });
         }),
     };
-    const deps = dependenciasCiclo(lento, crearProyectoTemporal(), { maxSegundosTurno: 1 });
+    const dependencias = dependenciasCiclo(lento, crearProyectoTemporal(), { maxSegundosTurno: 1 });
 
-    const r = await ejecutarTurno(deps, "s-plazo", "procesa sol-001");
+    const r = await ejecutarTurno(dependencias, "s-plazo", "procesa sol-001");
 
     expect(r.esError).toBe(true);
     expect(r.reply).toContain("tiempo máximo");

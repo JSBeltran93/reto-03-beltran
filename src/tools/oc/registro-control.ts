@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 
 import { ARCHIVOS_SALIDA, rutaSalida } from "../../comun/rutas";
 
@@ -57,7 +57,20 @@ export function filaCsv(fila: FilaControl): string {
 }
 
 /**
- * Agrega una fila a `<raiz>/out/control.csv`; escribe el encabezado la primera vez.
+ * Último resultado registrado para una solicitud, para no inflar la métrica con repeticiones.
+ * @param archivo - ruta de control.csv
+ * @param solicitudId - identificador de la solicitud
+ * @returns el último resultado, o null si no hay filas de esa solicitud
+ */
+function ultimoResultado(archivo: string, solicitudId: string): string | null {
+  const filas = readFileSync(archivo, "utf8").trim().split("\n").slice(1);
+  const propias = filas.filter((linea) => linea.startsWith(`${celda(solicitudId)},`));
+  return propias.at(-1)?.split(",")[1] ?? null;
+}
+
+/**
+ * Agrega una fila a `<raiz>/out/control.csv` (una por intento distinto, HU-5); escribe el
+ * encabezado la primera vez y omite la fila si repite el último resultado de esa solicitud.
  * @param raiz - raíz del proyecto
  * @param fila - fila a agregar
  */
@@ -65,5 +78,6 @@ export function registrarControl(raiz: string, fila: FilaControl): void {
   const archivo = rutaSalida(raiz, ARCHIVOS_SALIDA.control);
   mkdirSync(rutaSalida(raiz), { recursive: true });
   if (!existsSync(archivo)) appendFileSync(archivo, `${ENCABEZADO}\n`);
+  if (ultimoResultado(archivo, fila.solicitud_id) === fila.resultado) return;
   appendFileSync(archivo, `${filaCsv(fila)}\n`);
 }
