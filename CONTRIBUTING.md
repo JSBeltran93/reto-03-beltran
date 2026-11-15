@@ -22,12 +22,13 @@ npm run dev            # back (tsx watch) + front (Vite) con un solo comando
 | `src/tools/oc.ts`                 | Las cinco herramientas `oc_*` (contrato del PRD §6.2)                                                     |
 | `src/tools/oc/`                   | Dominio puro: esquemas, extractores, reglas RC1–RC10, validación, payload, evidencia, registro de control |
 | `src/sap/`                        | Puerto `SapAdapter` y simulador `SapSimulado`                                                             |
-| `src/llm/`                        | Puerto `AdaptadorLlm` y `AdaptadorAnthropic`                                                              |
+| `src/llm/`                        | Puerto `AdaptadorLlm`, `AdaptadorAnthropic` y el adaptador de respaldo                                    |
 | `src/agente/`                     | Ciclo del agente, compuerta de confirmación, sesiones, registro de herramientas, bitácora                 |
 | `src/comun/`                      | Resultado, catálogo de errores, reloj, registrador, huella, contratos de la API, rutas de `out/`          |
 | `src/server.ts`                   | API HTTP (`crearAplicacion`) y raíz de composición                                                        |
 | `web/`                            | Chat en React (TanStack Query + axios); sus tests van junto a cada componente                             |
 | `pruebas/`                        | Tests del back; `pruebas/dobles/` contiene el LLM falso                                                   |
+| `documentacion/decisiones/`       | Decisiones de arquitectura (ADR)                                                                          |
 
 Reglas de dependencia: el dominio (`src/tools/oc/`) nunca importa el ciclo del agente, el adaptador LLM ni Express. `src/server.ts` es el único lugar que compone las implementaciones reales.
 
@@ -103,9 +104,13 @@ No hace falta tocar el servidor, el ciclo del agente ni el front.
 2. Componerlo en `src/server.ts` según la configuración.
 3. El ciclo del agente, las herramientas y el front no cambian.
 
+## Cómo registrar una decisión
+
+Cada decisión de arquitectura va en un ADR nuevo en `documentacion/decisiones/` con la plantilla: Estado, Fecha, Contexto, Decisión, Consecuencias (positivas y negativas) y Alternativas consideradas; se enlaza desde `SOLUCION.md` §8.
+
 ## Definición de hecho
 
 - `npm run check` pasa sin avisos.
 - Los contratos del PRD siguen intactos (herramientas, API, `Paquete`, `OrdenCompra`, `SapAdapter`, `control.csv`).
 - El código nuevo exportado está documentado y probado.
-- El trabajo asistido por IA queda registrado en `documentacion/uso-ia.md`.
+- El trabajo asistido por IA queda registrado en `SOLUCION.md` §11.
