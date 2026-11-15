@@ -1,13 +1,21 @@
 import "./estilos.css";
 
+import { QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-const raiz = document.getElementById("root");
-if (!raiz) throw new Error("No se encontró el elemento #root en index.html");
+import Aplicacion from "./Aplicacion";
+import { crearClienteConsultas } from "./consultas/cliente-consultas";
 
-createRoot(raiz).render(
+const elementoRaiz = document.getElementById("root");
+if (!elementoRaiz) {
+  throw new Error("No se encontró el elemento #root en index.html");
+}
+
+createRoot(elementoRaiz).render(
   <StrictMode>
-    <main className="mx-auto max-w-3xl p-4">Órdenes de Compra · Agente</main>
+    <QueryClientProvider client={crearClienteConsultas()}>
+      <Aplicacion />
+    </QueryClientProvider>
   </StrictMode>,
 );
