@@ -12,6 +12,7 @@ import {
   aContenidosGemini,
   AdaptadorGemini,
   aRespuestaGemini,
+  FIRMA_RAZONAMIENTO_FICTICIA,
   type GenerarContenido,
   traducirErrorGemini,
 } from "../../src/llm/gemini";
@@ -56,7 +57,10 @@ describe("aContenidosGemini", () => {
         role: "model",
         parts: [
           { text: "voy" },
-          { functionCall: { id: "c1", name: "oc_leer_paquete", args: { caso: "sol-001" } } },
+          {
+            functionCall: { id: "c1", name: "oc_leer_paquete", args: { caso: "sol-001" } },
+            thoughtSignature: FIRMA_RAZONAMIENTO_FICTICIA,
+          },
         ],
       },
       {
@@ -71,6 +75,24 @@ describe("aContenidosGemini", () => {
           },
         ],
       },
+    ]);
+  });
+
+  it("sin partes originales pone la firma ficticia solo en la primera llamada del turno", () => {
+    const [contenido] = aContenidosGemini([
+      {
+        rol: "asistente",
+        texto: "",
+        llamadas: [
+          { id: "c1", nombre: "oc_leer_paquete", args: { caso: "sol-001" } },
+          { id: "c2", nombre: "oc_validar", args: { caso: "sol-001" } },
+        ],
+      },
+    ]);
+
+    expect(contenido?.parts?.map((p) => p.thoughtSignature)).toEqual([
+      FIRMA_RAZONAMIENTO_FICTICIA,
+      undefined,
     ]);
   });
 

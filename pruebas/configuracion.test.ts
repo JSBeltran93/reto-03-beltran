@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { cargarConfiguracion, VALORES_POR_DEFECTO } from "../src/configuracion";
+import { cargarConfiguracion, separarModelos, VALORES_POR_DEFECTO } from "../src/configuracion";
 
 describe("cargarConfiguracion", () => {
   it("usa los valores por defecto, incluido el modelo de respaldo", () => {
     const configuracion = cargarConfiguracion({});
 
     expect(configuracion.LLM_MODELO).toBe(VALORES_POR_DEFECTO.modelo);
-    expect(configuracion.LLM_MODELO_RESPALDO).toBe(VALORES_POR_DEFECTO.modeloRespaldo);
+    expect(configuracion.LLM_MODELOS_RESPALDO).toEqual([
+      "gemini-3.5-flash-lite",
+      "gemini-3.1-flash-lite",
+      "gemini-3-flash-preview",
+    ]);
     expect(configuracion.MAX_SEGUNDOS_TURNO).toBe(VALORES_POR_DEFECTO.maxSegundosTurno);
     expect(configuracion.GEMINI_API_KEY).toBe("");
   });
@@ -22,6 +26,26 @@ describe("cargarConfiguracion", () => {
 
   it("trata un modelo vacío como no definido", () => {
     expect(cargarConfiguracion({ LLM_MODELO: "" }).LLM_MODELO).toBe(VALORES_POR_DEFECTO.modelo);
+  });
+
+  it.each([
+    ["un solo modelo", "respaldo-a", ["respaldo-a"]],
+    [
+      "varios con espacios",
+      " respaldo-a , respaldo-b,respaldo-c ",
+      ["respaldo-a", "respaldo-b", "respaldo-c"],
+    ],
+    ["elementos vacíos", "respaldo-a,, ,respaldo-b,", ["respaldo-a", "respaldo-b"]],
+  ])("lee la lista de modelos de respaldo: %s", (_caso, valor, esperado) => {
+    expect(cargarConfiguracion({ LLM_MODELO_RESPALDO: valor }).LLM_MODELOS_RESPALDO).toEqual(
+      esperado,
+    );
+  });
+
+  it("usa los respaldos por defecto si la lista queda vacía", () => {
+    expect(cargarConfiguracion({ LLM_MODELO_RESPALDO: " , " }).LLM_MODELOS_RESPALDO).toEqual(
+      separarModelos(VALORES_POR_DEFECTO.modelosRespaldo),
+    );
   });
 
   it("convierte números desde texto", () => {
