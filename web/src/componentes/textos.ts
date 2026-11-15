@@ -1,6 +1,6 @@
 /**
- * Mensaje constante que envía "Procesar" para un caso (el del PRD §11): pide la OC como
- * quedaría en SAP, las validaciones y no crearla sin confirmación.
+ * Mensaje constante que envía "Revisar solicitud" para un caso (el del PRD §11): pide la OC
+ * como quedaría en SAP, las validaciones y no crearla sin confirmación.
  * @param caso - carpeta del caso
  * @returns el mensaje para el agente
  */
@@ -15,103 +15,140 @@ export const RESPUESTAS_CONFIRMACION = {
 
 /** Textos del cuadro de mensaje. */
 export const TEXTOS_COMPOSITOR = {
-  etiqueta: "Mensaje para el agente",
+  etiqueta: "Mensaje para el asistente",
   enviar: "Enviar",
   /** Textos guía cortos: deben caber en el cuadro de mensaje en pantallas de 320 px. */
-  normal: "Escribe un mensaje para el agente…",
+  normal: "Pregúntame lo que necesites…",
   esperandoConfirmacion: "Responde «Confirmo» o «Cancelar»…",
-  ayuda: "Enter envía · Shift + Enter agrega una línea",
+  ayuda: "Enter para enviar · Shift + Enter para otra línea",
 } as const;
 
 /** Textos del encabezado. */
 export const TEXTOS_ENCABEZADO = {
-  titulo: "Órdenes de Compra",
-  subtitulo: "Agente que prepara, valida y crea OC en SAP",
+  titulo: "Órdenes de compra",
+  subtitulo: "Revisa solicitudes y crea OC en SAP sin salir de aquí",
   sigla: "OC",
-  nuevaSesion: "Nueva sesión",
-  enLinea: "En línea",
+  nuevaSesion: "Nueva conversación",
+  enLinea: "Conectado",
   modelo: (modelo: string): string => `Modelo: ${modelo}`,
   conectando: "Conectando…",
-  sinServidor: "Servidor no disponible",
-  estadoServidor: "Estado del servidor: ",
-  claveInvalida: "Clave del modelo inválida",
+  sinServidor: "Sin conexión",
+  estadoServidor: "Estado del asistente: ",
+  claveInvalida: "Asistente sin acceso",
 } as const;
 
 /** Textos del estado vacío del panel de conversación. */
 export const TEXTOS_ESTADO_VACIO = {
-  titulo: "Elige una solicitud de la bandeja",
+  titulo: "Elige una solicitud para empezar",
   descripcion:
-    "El agente lee el paquete de compra, valida los controles RC1–RC10 contra los maestros y te muestra la OC antes de crearla en SAP.",
+    "Yo reviso los documentos y los datos maestros; tú decides. Nada llega a SAP sin tu confirmación.",
   pasos: [
-    "Lee correo, solicitud, cotización y aprobación",
-    "Valida proveedor, aprobador, topes, IVA y fechas",
-    "Crea la OC en SAP solo con tu confirmación",
+    "Leo el correo, la solicitud, la cotización y la aprobación",
+    "Reviso proveedor, aprobador, topes, IVA y fechas",
+    "Creo la OC en SAP cuando tú me lo confirmes",
   ],
 } as const;
 
 /** Textos de la bandeja de solicitudes y de la cabecera del caso. */
 export const TEXTOS_BANDEJA = {
-  titulo: "Bandeja",
+  titulo: "Solicitudes",
   region: "Solicitudes de compra",
   conteo: (total: number): string => (total === 1 ? "1 solicitud" : `${total} solicitudes`),
-  cargando: "Cargando solicitudes…",
-  error: "No se pudo cargar la bandeja.",
+  cargando: "Cargando tus solicitudes…",
+  error: "No pude cargar las solicitudes. Reintenta en unos segundos.",
   reintentar: "Reintentar",
-  abrirConversacion: "Ir a la conversación",
-  ayudaSinBandeja: "Puedes escribirle al agente aunque la bandeja no cargue.",
-  vacia: "No hay solicitudes en la bandeja.",
-  volver: "Bandeja",
-  procesar: "Procesar",
-  ayudaProcesar:
-    "El agente valida la solicitud y te muestra la OC; no la crea sin tu confirmación.",
+  abrirConversacion: "Ir al chat",
+  ayudaSinBandeja: "Mientras tanto, puedes escribirme en el chat.",
+  vacia: "No tienes solicitudes por revisar. ¡Todo al día!",
+  volver: "Solicitudes",
+  procesar: "Revisar solicitud",
+  ayudaProcesar: "Te muestro la OC y lo que encontré. No creo nada en SAP sin tu confirmación.",
   estado: "Estado: ",
+  estados: {
+    creada: "Creada",
+    pendiente: "Esperando tu confirmación",
+    bloqueada: "Bloqueada",
+    sinProcesar: "Por revisar",
+  },
   numeroOc: (numero: string): string => `OC ${numero}`,
   centro: "Centro de costo",
 } as const;
 
 /** Textos de la tarjeta de confirmación. */
 export const TEXTOS_CONFIRMACION = {
-  titulo: "Se necesita tu confirmación antes de crear la OC",
-  tituloCaso: (caso: string): string => `Confirma la OC de ${caso}`,
-  ayuda: "Revisa los puntos que requieren confirmación y decide.",
-  confirmar: "Confirmar y crear OC",
-  cancelar: "Cancelar",
+  titulo: "¿Creamos la OC con estos datos?",
+  tituloCaso: (caso: string): string => `¿Creamos la OC de ${caso}?`,
+  ayuda: "Antes de crearla, confirma esto:",
+  ayudaSinPuntos: "Revisa los datos de la OC y decide.",
+  confirmar: "Sí, crear la OC",
+  cancelar: "No, cancelar",
 } as const;
 
-/** Textos de una llamada a herramienta y de los resultados enriquecidos. */
+/** Textos de los pasos del agente y de los resultados enriquecidos. */
 export const TEXTOS_HERRAMIENTA = {
-  etiqueta: (nombre: string): string => `Llamada a ${nombre}`,
-  correcta: "Llamada correcta: ",
-  conError: "Llamada con error: ",
-  resumen: "Resultado",
-  argumentos: "Argumentos",
-  datos: "Datos completos",
-  detalles: "Detalle técnico",
-  pasos: "Pasos del agente",
-  validacion: "Resultado de la validación",
+  correcta: "Hecho: ",
+  conError: "No se pudo: ",
+  argumentos: "Datos enviados",
+  datos: "Respuesta completa",
+  detalles: "Ver detalle",
+  pasos: "Lo que hice",
+  validacion: "Resultado de la revisión",
 } as const;
 
 /** Textos del resultado de la validación. */
 export const TEXTOS_VALIDACION = {
-  apta: "Apta para crear la OC",
-  noApta: "No se puede crear la OC",
+  apta: "Todo en orden para crear la OC",
+  noApta: "Esta OC todavía no se puede crear",
   retroactiva:
-    "OC retroactiva: la factura es anterior a la solicitud. Quedará marcada para medición.",
-  controles: "Controles",
+    "Ojo: la factura es anterior a la solicitud, así que la OC quedará marcada como retroactiva.",
+  controles: "Lo que encontré",
   tipos: {
-    bloqueo: "Bloqueo",
-    confirmacion: "Requiere confirmación",
-    derivado: "Valor derivado",
+    bloqueo: "Impide crear la OC",
+    confirmacion: "Necesita tu confirmación",
+    derivado: "Lo completé por ti",
   },
-  accion: "Acción sugerida: ",
+  regla: (regla: string): string => `Regla ${regla}`,
+  accion: "Qué hacer: ",
   valores: "Valores",
 } as const;
 
+/**
+ * Nombre legible de cada valor que acompaña un hallazgo (las claves que devuelve
+ * `oc_validar`); una clave desconocida se muestra con {@link etiquetaValor}.
+ */
+export const ETIQUETAS_VALORES: Readonly<Record<string, string>> = {
+  solicitud: "Solicitud",
+  cotizacion: "Cotización",
+  diferencia_pct: "Diferencia",
+  valor_total: "Valor total",
+  tope: "Tope del aprobador",
+  calculado: "Cantidad × valor unitario",
+  moneda: "Moneda",
+  moneda_solicitud: "Moneda de la solicitud",
+  moneda_cotizacion: "Moneda de la cotización",
+  indicador_iva: "Indicador de IVA",
+  condiciones_pago: "Condiciones de pago",
+  fecha_factura: "Fecha de la factura",
+  fecha_solicitud: "Fecha de la solicitud",
+};
+
+/**
+ * Nombre legible de un valor de un hallazgo: el conocido o la clave sin guiones bajos.
+ * @param clave - clave del valor (p. ej. "diferencia_pct")
+ * @returns la etiqueta (p. ej. "Diferencia")
+ */
+export function etiquetaValor(clave: string): string {
+  const conocida = ETIQUETAS_VALORES[clave];
+  if (conocida) return conocida;
+  const texto = clave.replaceAll("_", " ");
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
 /** Textos de la orden de compra propuesta y creada. */
 export const TEXTOS_ORDEN = {
-  titulo: "Orden de compra propuesta",
-  borrador: "Borrador · así quedaría en SAP",
-  posiciones: "Posiciones",
+  titulo: "Así quedaría la OC en SAP",
+  borrador: "Borrador · aún no se ha creado",
+  posiciones: "Productos y servicios",
   columnas: {
     descripcion: "Descripción",
     cantidad: "Cantidad",
@@ -119,7 +156,7 @@ export const TEXTOS_ORDEN = {
     subtotal: "Subtotal",
   },
   referencia: "Solicitud",
-  sociedad: "Sociedad / Org. compras",
+  sociedad: "Sociedad / Org. de compras",
   moneda: "Moneda",
   campos: {
     proveedor: "Proveedor",
@@ -128,21 +165,21 @@ export const TEXTOS_ORDEN = {
     condiciones: "Condiciones de pago",
     aprobador: "Aprobador",
     total: "Total",
-    excepciones: "Excepciones",
+    excepciones: "Excepciones confirmadas",
   },
   sinExcepciones: "Ninguna",
-  creada: (numero: string): string => `OC ${numero} creada en SAP`,
-  existente: (numero: string): string => `La OC ${numero} ya existía (idempotencia)`,
+  creada: (numero: string): string => `Listo: OC ${numero} creada en SAP`,
+  existente: (numero: string): string => `La OC ${numero} ya estaba creada; no la dupliqué`,
   evidencia: "Evidencia de aprobación: ",
-  fecha: "Fecha: ",
+  fecha: "Creada el ",
 } as const;
 
 /** Textos de estado y error. */
 export const TEXTOS_ESTADO = {
-  pensando: "El agente está trabajando…",
+  pensando: "Revisando la solicitud…",
   reintentar: "Reintentar",
-  esperaReintento: (segundos: number): string => `Podrás reintentar en ${segundos} s`,
+  esperaReintento: (segundos: number): string => `Puedes reintentar en ${segundos} s`,
   conversacion: "Conversación",
-  agente: "Agente",
+  agente: "Asistente",
   usuario: "Tú",
 } as const;

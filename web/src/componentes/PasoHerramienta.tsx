@@ -3,6 +3,7 @@ import type { VistaLlamada } from "@contratos/contratos-api";
 import { etiquetaPaso } from "../estado/herramientas";
 import { casoDeLlamada } from "../estado/resultados";
 import { TONOS } from "./clases";
+import { IconoEquis, IconoVerificado } from "./Iconos";
 import { TEXTOS_HERRAMIENTA } from "./textos";
 
 /** Props de {@link PasoHerramienta}. */
@@ -13,34 +14,40 @@ export interface PropiedadesPasoHerramienta {
 function IconoEstado({ ok }: { readonly ok: boolean }) {
   return (
     <span
-      className={`grid size-5 shrink-0 place-items-center rounded-full text-xs font-bold ${TONOS[ok ? "exito" : "peligro"]}`}
+      className={`mt-0.5 grid size-6 shrink-0 place-items-center rounded-full ${TONOS[ok ? "exito" : "peligro"]}`}
     >
       <span className="sr-only">
         {ok ? TEXTOS_HERRAMIENTA.correcta : TEXTOS_HERRAMIENTA.conError}
       </span>
-      <span aria-hidden="true">{ok ? "✓" : "✕"}</span>
+      {ok ? <IconoVerificado className="size-3.5" /> : <IconoEquis className="size-3.5" />}
     </span>
   );
 }
 
 function BloqueJson({ valor }: { readonly valor: unknown }) {
   return (
-    <pre className="mt-1 max-h-80 overflow-auto rounded-lg bg-elevada p-3 font-mono break-all whitespace-pre-wrap">
+    <pre className="mt-1 max-h-80 overflow-auto rounded-xl bg-elevada p-3 font-mono break-all whitespace-pre-wrap">
       {JSON.stringify(valor, null, 2)}
     </pre>
   );
 }
 
 /**
- * "Detalle técnico" plegable: argumentos y resultado completo en JSON.
+ * "Ver detalle" plegable (PRD §6.1, CA4): la herramienta que se llamó, el caso, los
+ * argumentos y el resultado completo en JSON. El nombre técnico se asoma en el resumen.
  * @param props - la llamada
  * @returns los detalles
  */
 function DetalleTecnico({ llamada }: PropiedadesPasoHerramienta) {
+  const caso = casoDeLlamada(llamada);
   return (
     <details className="mt-1 text-xs">
-      <summary className="anillo-foco w-fit cursor-pointer rounded py-1 text-texto-suave hover:text-texto">
-        {TEXTOS_HERRAMIENTA.detalles}
+      <summary className="anillo-foco inline-flex cursor-pointer items-center gap-2 rounded py-1 text-texto-suave hover:text-texto">
+        <span>{TEXTOS_HERRAMIENTA.detalles}</span>
+        <code className="font-mono text-[0.6875rem] opacity-80">
+          {llamada.nombre}
+          {caso && ` · ${caso}`}
+        </code>
       </summary>
       <p className="mt-1 font-semibold">{TEXTOS_HERRAMIENTA.argumentos}</p>
       <BloqueJson valor={llamada.args} />
@@ -55,29 +62,20 @@ function DetalleTecnico({ llamada }: PropiedadesPasoHerramienta) {
 }
 
 /**
- * Un paso del agente (PRD §6.1), siempre visible: estado, nombre legible, herramienta
- * técnica, caso y resultado resumido; argumentos y datos en "Detalle técnico".
+ * Un paso del agente (PRD §6.1), siempre visible: estado y qué hizo en lenguaje natural,
+ * con el resultado resumido como texto secundario; la herramienta técnica, el caso, los
+ * argumentos y los datos quedan en "Ver detalle".
  * @param props - la llamada
  * @returns el paso
  */
 export function PasoHerramienta({ llamada }: PropiedadesPasoHerramienta) {
-  const caso = casoDeLlamada(llamada);
+  const etiqueta = etiquetaPaso(llamada.nombre);
   return (
-    <div
-      role="group"
-      aria-label={TEXTOS_HERRAMIENTA.etiqueta(llamada.nombre)}
-      className="flex gap-3"
-    >
+    <div role="group" aria-label={etiqueta} className="flex gap-3">
       <IconoEstado ok={llamada.ok} />
       <div className="min-w-0 flex-1">
-        <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
-          <span className="font-medium">{etiquetaPaso(llamada.nombre)}</span>
-          <span className="text-xs text-texto-suave">
-            {llamada.nombre}
-            {caso && ` · ${caso}`}
-          </span>
-        </p>
-        <p className="text-sm text-texto-suave wrap-anywhere">{llamada.resumen}</p>
+        <p className="text-sm leading-6 font-medium">{etiqueta}</p>
+        <p className="text-xs leading-5 text-texto-suave wrap-anywhere">{llamada.resumen}</p>
         <DetalleTecnico llamada={llamada} />
       </div>
     </div>

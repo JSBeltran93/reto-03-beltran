@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { PasoHerramienta } from "./PasoHerramienta";
 import { PasosTurno } from "./PasosTurno";
-import { TEXTOS_HERRAMIENTA } from "./textos";
+import { TEXTOS_HERRAMIENTA, TEXTOS_ORDEN, TEXTOS_VALIDACION } from "./textos";
 
 const validacion = {
   apta: true,
@@ -14,7 +14,7 @@ const validacion = {
       regla: "RC5",
       tipo: "confirmacion",
       detalle: "La cotización (26.500.000) difiere 6 % de la solicitud (25.000.000).",
-      valores: { solicitud: 25_000_000, cotizacion: 26_500_000 },
+      valores: { solicitud: 25_000_000, cotizacion: 26_500_000, diferencia_pct: 6 },
     },
   ],
   informativos: [],
@@ -51,7 +51,7 @@ const llamadaPayload = (orden: object) => ({
 });
 
 describe("PasoHerramienta", () => {
-  it("muestra paso, herramienta, caso, estado y resumen; el detalle técnico trae los argumentos", async () => {
+  it("muestra el paso en lenguaje natural y su resumen; el detalle trae herramienta, caso y argumentos", async () => {
     const llamada = {
       nombre: "oc_validar",
       args: { caso: "sol-004" },
@@ -59,12 +59,12 @@ describe("PasoHerramienta", () => {
       resumen: "apta · confirmaciones: RC5",
     };
     render(<PasoHerramienta llamada={llamada} />);
-    const paso = screen.getByRole("group", { name: "Llamada a oc_validar" });
+    const paso = screen.getByRole("group", { name: "Validé contra los maestros" });
 
-    expect(within(paso).getByText("Validar controles")).toBeVisible();
-    expect(within(paso).getByText("oc_validar · sol-004")).toBeVisible();
+    expect(within(paso).getByText("Validé contra los maestros")).toBeVisible();
     expect(within(paso).getByText("apta · confirmaciones: RC5")).toBeVisible();
-    expect(within(paso).getByText(/Llamada correcta/)).toBeInTheDocument();
+    expect(within(paso).getByText(TEXTOS_HERRAMIENTA.correcta.trim())).toBeInTheDocument();
+    expect(within(paso).getByText("oc_validar · sol-004")).toBeInTheDocument();
 
     await userEvent.click(within(paso).getByText(TEXTOS_HERRAMIENTA.detalles));
 
@@ -90,7 +90,9 @@ describe("PasoHerramienta", () => {
       <PasoHerramienta llamada={{ nombre: "oc_crear", args: {}, ok: false, resumen: "NO_APTA" }} />,
     );
 
-    expect(screen.getByText(/Llamada con error/)).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Creé la OC en SAP" })).toHaveTextContent(
+      TEXTOS_HERRAMIENTA.conError.trim(),
+    );
   });
 });
 
@@ -105,12 +107,18 @@ describe("PasosTurno", () => {
       />,
     );
     const pasos = screen.getByRole("region", { name: TEXTOS_HERRAMIENTA.pasos });
-    const controles = screen.getByRole("list", { name: "Controles" });
+    const controles = screen.getByRole("list", { name: TEXTOS_VALIDACION.controles });
 
-    expect(within(pasos).getAllByRole("group", { name: /Llamada a/ })).toHaveLength(2);
-    expect(screen.getByText("Apta para crear la OC")).toBeInTheDocument();
-    expect(within(controles).getByText(/RC5 · Requiere confirmación/)).toBeInTheDocument();
-    expect(within(controles).getByText("26.500.000")).toBeInTheDocument();
+    expect(within(pasos).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(pasos).getByRole("group", { name: "Leí los documentos" })).toBeInTheDocument();
+    expect(screen.getByText(TEXTOS_VALIDACION.apta)).toBeInTheDocument();
+    expect(within(controles).getByText(/La cotización \(26\.500\.000\) difiere 6 %/)).toBeVisible();
+    expect(within(controles).getByText(TEXTOS_VALIDACION.tipos.confirmacion)).toBeInTheDocument();
+    expect(within(controles).getByText("RC5")).toBeInTheDocument();
+    expect(within(controles).getByText("Cotización")).toBeInTheDocument();
+    expect(within(controles).getByText(/^COP\s26\.500\.000$/)).toBeInTheDocument();
+    expect(within(controles).getByText("Diferencia")).toBeInTheDocument();
+    expect(within(controles).getByText("6 %")).toBeInTheDocument();
   });
 
   it("muestra la OC como documento y la creación como tarjeta de éxito", () => {
@@ -128,14 +136,14 @@ describe("PasosTurno", () => {
         ]}
       />,
     );
-    const documento = screen.getByRole("article", { name: "Orden de compra propuesta" });
+    const documento = screen.getByRole("article", { name: TEXTOS_ORDEN.titulo });
 
     expect(within(documento).getByText(/Cloud Andina S.A.S./)).toBeInTheDocument();
     expect(within(documento).getByText(/SOL-2026-004/)).toBeInTheDocument();
     expect(within(documento).getByText("1000 / 1000")).toBeInTheDocument();
     expect(within(documento).getByRole("columnheader", { name: "Subtotal" })).toBeInTheDocument();
     expect(within(documento).getByText("Ninguna")).toBeInTheDocument();
-    expect(screen.getByText("OC 4500000002 creada en SAP")).toBeInTheDocument();
+    expect(screen.getByText("Listo: OC 4500000002 creada en SAP")).toBeInTheDocument();
     expect(screen.getByText(/septiembre de 2026/)).toHaveAttribute("datetime", creada.fecha);
     expect(screen.getByText("out/sol-004/aprobacion.txt")).toBeInTheDocument();
   });
@@ -151,8 +159,10 @@ describe("PasosTurno", () => {
       ],
     };
     render(<PasosTurno llamadas={[llamadaPayload(orden)]} />);
-    const documento = screen.getByRole("article", { name: "Orden de compra propuesta" });
-    const excepciones = within(documento).getByRole("list", { name: "Excepciones" });
+    const documento = screen.getByRole("article", { name: TEXTOS_ORDEN.titulo });
+    const excepciones = within(documento).getByRole("list", {
+      name: TEXTOS_ORDEN.campos.excepciones,
+    });
 
     expect(within(documento).getByText("Total").parentElement).toHaveTextContent(/USD\s3\.021/);
     expect(within(excepciones).getAllByRole("listitem")).toHaveLength(2);
