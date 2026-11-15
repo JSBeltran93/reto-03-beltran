@@ -1,7 +1,10 @@
 /** Esquemas zod de los archivos de fixtures y de los contratos del PRD (§7.1, §7.2, §7.4). */
 import { z } from "zod";
 
-const fechaIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha con formato YYYY-MM-DD");
+import { MAX_DESCRIPCION_SAP, ORGANIZACION_COMPRAS, SOCIEDAD } from "./constantes";
+
+/** Fecha calendario válida con formato YYYY-MM-DD (rechaza, p. ej., 2026-13-45). */
+const fechaIso = z.iso.date();
 
 /** Solicitud de compra (`solicitud.xlsx` normalizado), PRD §7.1. */
 export const EsquemaSolicitud = z.object({
@@ -118,8 +121,8 @@ export const EsquemaOrdenCompra = z.object({
     correo_id: z.string(),
     cotizacion_ref: z.string().nullable(),
   }),
-  sociedad: z.literal("1000"),
-  organizacion_compras: z.literal("1000"),
+  sociedad: z.literal(SOCIEDAD),
+  organizacion_compras: z.literal(ORGANIZACION_COMPRAS),
   proveedor: z.object({ codigo_sap: z.string(), nit: z.string(), nombre: z.string() }),
   moneda: z.enum(["COP", "USD"]),
   condiciones_pago: z.string(),
@@ -132,7 +135,7 @@ export const EsquemaOrdenCompra = z.object({
     .array(
       z.object({
         numero: z.number().int(),
-        descripcion: z.string().max(40),
+        descripcion: z.string().max(MAX_DESCRIPCION_SAP),
         cantidad: z.number(),
         unidad: z.enum(["UN", "H", "MES"]),
         precio_unitario: z.number(),

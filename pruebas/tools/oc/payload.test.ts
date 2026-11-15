@@ -73,4 +73,19 @@ describe("construirOrden", () => {
   it("rechaza los casos bloqueados", () => {
     expect(ordenDe("sol-002")).toMatchObject({ ok: false, error: { codigo: "NO_APTA" } });
   });
+
+  describe("trazabilidad (HU-3)", () => {
+    it("usa solo las fuentes del PRD y traza cada campo del payload", () => {
+      const resultado = ordenDe("sol-001");
+      if (!resultado.ok) throw new Error("sol-001 debería ser apta");
+      const fuentes = Object.values(resultado.data.trazabilidad).map((t) => t.fuente);
+
+      for (const fuente of fuentes) {
+        expect(fuente).toMatch(/^(solicitud|cotizacion|derivado|maestro\.[a-z-]+)$/);
+      }
+      expect(Object.keys(resultado.data.trazabilidad)).toEqual(
+        expect.arrayContaining(["posiciones[0].numero", "excepciones", "aprobador.email"]),
+      );
+    });
+  });
 });

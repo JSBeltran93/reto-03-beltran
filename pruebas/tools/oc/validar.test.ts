@@ -66,4 +66,15 @@ describe("oc_validar", () => {
     expect(data.apta).toBe(false);
     expect(data.aviso).toContain("difiere");
   });
+
+  it("registra como pendiente la validación apta que espera confirmación (HU-5)", async () => {
+    const raiz = crearProyectoTemporal();
+    await ejecutarValidacion(raiz, "sol-004");
+
+    const lineas = readFileSync(path.join(raiz, "out", "control.csv"), "utf8")
+      .trim()
+      .split("\n");
+
+    expect(lineas[1]).toMatch(/^SOL-2026-004,pendiente,,false,,RC5,\d{4}-/);
+  });
 });

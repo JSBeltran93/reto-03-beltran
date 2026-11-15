@@ -42,7 +42,8 @@ export function aNumero(crudo: string): number {
  */
 export function extraerMonto(texto: string): Resultado<Monto> {
   const coincidencia = /([A-Z]{3})\s*\$?\s*([\d.,]+)/.exec(texto);
-  const valor = coincidencia?.[2] === undefined ? Number.NaN : aNumero(coincidencia[2]);
+  const crudo = coincidencia?.[2];
+  const valor = crudo === undefined || !/\d/.test(crudo) ? Number.NaN : aNumero(crudo);
   if (coincidencia?.[1] === undefined || Number.isNaN(valor)) {
     return fallo("MONTO_INVALIDO", `No se pudo interpretar el monto "${texto.trim()}".`);
   }
