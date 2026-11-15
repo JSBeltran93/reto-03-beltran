@@ -8,8 +8,14 @@
   --color-danger: var(--color-rose-600);
 }
 
+:root {
+  /* Alto reservado para el pie fijo: el desplazamiento automático no deja contenido debajo de él. */
+  --espacio-pie: 7rem;
+}
+
 @layer base {
   html {
+    scroll-padding-bottom: var(--espacio-pie);
     @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
   }
 }

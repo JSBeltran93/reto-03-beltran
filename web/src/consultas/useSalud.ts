@@ -1,7 +1,7 @@
 import type { Salud } from "@contratos/contratos-api";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 
-import { obtenerSalud } from "../api/chat";
+import { obtenerSalud } from "../api/salud";
 
 /** Clave de caché de la consulta de salud. */
 export const CLAVE_SALUD = ["salud"] as const;

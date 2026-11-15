@@ -1,10 +1,26 @@
 import type { EntradaHistorial, RespuestaChat } from "@contratos/contratos-api";
 
+/**
+ * Nombres de las herramientas del PRD §6.2 que el front necesita para deducir si,
+ * tras recargar, el agente quedó esperando una confirmación.
+ */
+const HERRAMIENTAS = {
+  construirPayload: "oc_construir_payload",
+  crear: "oc_crear",
+} as const;
+
+/** Error visible en la interfaz. */
+export interface ErrorVisible {
+  readonly mensaje: string;
+  /** Si tiene sentido ofrecer "Reintentar". */
+  readonly reintentable: boolean;
+}
+
 /** Estado de la conversación en la interfaz. */
 export interface EstadoConversacion {
   readonly sessionId: string;
   readonly entradas: readonly EntradaHistorial[];
-  readonly error: string | null;
+  readonly error: ErrorVisible | null;
   readonly esperaConfirmacion: boolean;
   readonly ultimoMensaje: string | null;
 }
@@ -13,8 +29,13 @@ export interface EstadoConversacion {
 export type AccionConversacion =
   | { readonly tipo: "ENVIAR"; readonly texto: string }
   | { readonly tipo: "REINTENTAR" }
-  | { readonly tipo: "RESPUESTA"; readonly respuesta: RespuestaChat }
-  | { readonly tipo: "FALLO"; readonly mensaje: string }
+  | { readonly tipo: "RESPUESTA"; readonly sessionId: string; readonly respuesta: RespuestaChat }
+  | { readonly tipo: "FALLO"; readonly sessionId: string; readonly error: ErrorVisible }
+  | {
+      readonly tipo: "HIDRATAR";
+      readonly sessionId: string;
+      readonly historial: readonly EntradaHistorial[];
+    }
   | { readonly tipo: "NUEVA_SESION"; readonly sessionId: string };
 
 /**
@@ -26,11 +47,44 @@ export function estadoInicial(sessionId: string): EstadoConversacion {
   return { sessionId, entradas: [], error: null, esperaConfirmacion: false, ultimoMensaje: null };
 }
 
+function ultimoIndiceDe(historial: readonly EntradaHistorial[], nombre: string): number {
+  return historial.findLastIndex(
+    (entrada) =>
+      entrada.tipo === "herramienta" && entrada.llamada.ok && entrada.llamada.nombre === nombre,
+  );
+}
+
+/**
+ * Deduce, con una heurística, si un historial recuperado del servidor quedó esperando
+ * confirmación: termina en un mensaje del agente, hubo un `oc_construir_payload` correcto
+ * y no hubo un `oc_crear` correcto después. El servidor no expone su estado de
+ * confirmación, así que es la mejor aproximación sin cambiar el contrato.
+ * @param historial - historial de la sesión
+ * @returns true si conviene mostrar el aviso de confirmación
+ */
+export function esperaConfirmacionEnHistorial(historial: readonly EntradaHistorial[]): boolean {
+  const indicePayload = ultimoIndiceDe(historial, HERRAMIENTAS.construirPayload);
+  const terminaEnAgente = historial.at(-1)?.tipo === "asistente";
+  return (
+    terminaEnAgente &&
+    indicePayload >= 0 &&
+    indicePayload > ultimoIndiceDe(historial, HERRAMIENTAS.crear)
+  );
+}
+
 function conRespuesta(estado: EstadoConversacion, respuesta: RespuestaChat): EstadoConversacion {
   const herramientas: EntradaHistorial[] = respuesta.toolCalls.map((llamada) => ({
     tipo: "herramienta",
     llamada,
   }));
+  if (respuesta.esError === true) {
+    return {
+      ...estado,
+      entradas: [...estado.entradas, ...herramientas],
+      error: { mensaje: respuesta.reply, reintentable: true },
+      esperaConfirmacion: false,
+    };
+  }
   return {
     ...estado,
     entradas: [...estado.entradas, ...herramientas, { tipo: "asistente", texto: respuesta.reply }],
@@ -39,7 +93,8 @@ function conRespuesta(estado: EstadoConversacion, respuesta: RespuestaChat): Est
 }
 
 /**
- * Transición pura del estado de la conversación.
+ * Transición pura del estado de la conversación. Las respuestas, fallos e
+ * hidrataciones de otra sesión (p. ej. tras "Nueva sesión") se ignoran.
  * @param estado - estado actual
  * @param accion - evento a aplicar
  * @returns el estado siguiente
@@ -59,9 +114,19 @@ export function reducirConversacion(
     case "REINTENTAR":
       return { ...estado, error: null };
     case "RESPUESTA":
-      return conRespuesta(estado, accion.respuesta);
+      return accion.sessionId === estado.sessionId
+        ? conRespuesta(estado, accion.respuesta)
+        : estado;
     case "FALLO":
-      return { ...estado, error: accion.mensaje };
+      return accion.sessionId === estado.sessionId ? { ...estado, error: accion.error } : estado;
+    case "HIDRATAR":
+      if (accion.sessionId !== estado.sessionId) return estado;
+      return {
+        ...estado,
+        entradas: accion.historial,
+        error: null,
+        esperaConfirmacion: esperaConfirmacionEnHistorial(accion.historial),
+      };
     case "NUEVA_SESION":
       return estadoInicial(accion.sessionId);
   }
