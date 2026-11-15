@@ -1,3 +1,4 @@
+import { CLASES, TONOS } from "./clases";
 import { TEXTOS_ESTADO } from "./textos";
 
 /** Props de {@link AvisoError}. */
@@ -16,15 +17,14 @@ export function AvisoError({ mensaje, alReintentar }: PropiedadesAvisoError) {
   return (
     <div
       role="alert"
-      className="flex items-center gap-3 rounded-xl border border-danger bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:bg-rose-950 dark:text-rose-100"
+      className={`flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3 text-sm ${TONOS.peligro}`}
     >
-      <p className="[overflow-wrap:anywhere]">{mensaje}</p>
+      <p className="min-w-0 flex-1 font-medium wrap-anywhere">
+        <span aria-hidden="true">⛔ </span>
+        {mensaje}
+      </p>
       {alReintentar && (
-        <button
-          type="button"
-          onClick={alReintentar}
-          className="ml-auto rounded-lg border border-rose-700 px-3 py-1 font-medium hover:bg-rose-100 focus-visible:outline-2 focus-visible:outline-brand dark:hover:bg-rose-900"
-        >
+        <button type="button" onClick={alReintentar} className={CLASES.botonSecundario}>
           {TEXTOS_ESTADO.reintentar}
         </button>
       )}

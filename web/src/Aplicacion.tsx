@@ -5,6 +5,7 @@ import { ListaMensajes } from "./componentes/ListaMensajes";
 import { PieCompositor } from "./componentes/PieCompositor";
 import { useDesplazarAlFinal } from "./componentes/useDesplazarAlFinal";
 import { useSalud } from "./consultas/useSalud";
+import { confirmacionesPendientes } from "./estado/resultados";
 import { useConversacion } from "./estado/useConversacion";
 
 /**
@@ -26,7 +27,7 @@ export default function Aplicacion() {
         deshabilitado={cargando}
         alNuevaSesion={nuevaSesion}
       />
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-4">
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-6">
         {entradas.length === 0 ? (
           <EstadoVacio alElegir={enviar} />
         ) : (
@@ -36,6 +37,7 @@ export default function Aplicacion() {
           cargando={cargando}
           error={error}
           mostrarConfirmacion={mostrarConfirmacion}
+          confirmaciones={confirmacionesPendientes(entradas)}
           alReintentar={reintentar}
           alEnviar={enviar}
         />
