@@ -4,7 +4,36 @@
 
 Agente conversacional que lee el paquete de una solicitud de compra, lo valida contra los maestros y los controles **RC1–RC10** y crea la orden de compra en un **SAP simulado** solo cuando corresponde, pidiendo confirmación humana en las excepciones.
 
+El front es **chat primero**: una conversación centrada con el compositor abajo. Al abrirla, el estado vacío ofrece sugerencias clicables con las solicitudes disponibles (`GET /api/casos`); cada llamada a herramienta aparece en línea con su etiqueta, su nombre técnico, los argumentos y el resultado resumido, y la confirmación se resalta con los dos valores y los botones "Sí, crear la OC" / "No, cancelar". La lista de solicitudes queda en un panel plegable; en móvil solo se ve el chat, con un botón para abrirla.
+
 **Link público:** https://reto-03-beltran-production.up.railway.app — no requiere clave de acceso.
+
+## Probar en 5 minutos
+
+En el link público (o en local con `npm run dev`, http://localhost:5173), sesión nueva:
+
+1. Elegir la sugerencia de sol-004 en el estado vacío o pegar el prompt del PRD §11:
+
+   ```
+   Procesa la solicitud "sol-004". Muéstrame la OC como quedaría en SAP, qué
+   validaciones pasó y cuáles no, y no la crees hasta que yo lo confirme.
+   ```
+
+2. Ver en línea las llamadas `oc_leer_paquete` → `oc_validar` → `oc_construir_payload` → `oc_generar_evidencia`, cada una con sus argumentos y su resultado resumido; la OC en tabla y la confirmación RC5 resaltada con los dos valores (solicitud 25.000.000 vs cotización 26.500.000, 6 %). El turno termina con una pregunta.
+3. Pulsar **"Sí, crear la OC"** (o escribir "confirmo"): el agente llama `oc_crear` y responde con el número de OC y la ruta de la evidencia. "No, cancelar" descarta el caso pendiente.
+
+Los demás casos ("Procesa la solicitud sol-00X"):
+
+| Caso         | Qué se ve                                                                                                                                   |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| sol-001      | OC creada sin intervención: el caso no tiene confirmaciones                                                                                 |
+| sol-002      | Bloqueada por RC1 (proveedor inexistente) con la acción sugerida; no se llama `oc_crear`                                                    |
+| sol-003      | Bloqueada por RC2 y RC3: el aprobador no es de CC-2020; sugiere revisar CC-3030 o escalar                                                   |
+| sol-005      | Pide confirmar la OC retroactiva (factura anterior a la solicitud); tras confirmar, la OC queda con `retroactiva=true` en `out/control.csv` |
+| sol-006      | Pide confirmar el IVA C1 derivado del proveedor (condiciones Z030 derivadas, solo informativas)                                             |
+| Idempotencia | Pedir de nuevo sol-001: devuelve el mismo número de OC con `idempotente: true`, sin crear otra                                              |
+
+El link usa la clave gratuita de Google AI Studio, que limita las solicitudes por minuto y el cupo diario de cada modelo. Si el modelo principal agota su cupo, responde el siguiente de `LLM_MODELO_RESPALDO`; si se agotan todos, el chat muestra un error claro y la sesión sigue viva: basta con esperar o correrlo en local con otra clave. El disco de Railway es efímero: al redesplegar se reinician los números de OC y el estado de las solicitudes.
 
 ## Inicio rápido
 
@@ -26,11 +55,11 @@ npm run dev          # back (http://localhost:3000) + front (http://localhost:51
 | `LLM_RAZONAMIENTO`       | `bajo`                                                               | Razonamiento del modelo (`minimo`, `bajo`, `medio`, `alto`); el modelo solo orquesta: más razonamiento, más latencia               |
 | `LLM_TIMEOUT_MS`         | `60000`                                                              | Tiempo máximo por llamada al modelo                                                                                                |
 | `MAX_ITERACIONES`        | `25`                                                                 | Tope de iteraciones herramienta → modelo por turno (CA1)                                                                           |
-| `MAX_SEGUNDOS_TURNO`     | `240`                                                                | Duración máxima de un turno (el front espera hasta 270 s)                                                                          |
-| `MAX_SOLICITUDES_MINUTO` | `20`                                                                 | Límite de mensajes por minuto e IP (responde 429 con `Retry-After`)                                                                |
 | `MAX_TOKENS_SESION`      | `200000`                                                             | Tope de tokens por sesión                                                                                                          |
 | `MAX_TOKENS_DIA`         | `3000000`                                                            | Tope diario de tokens del servidor                                                                                                 |
 | `MAX_SESIONES`           | `200`                                                                | Sesiones en memoria (se desaloja la de uso menos reciente)                                                                         |
+| `MAX_SEGUNDOS_TURNO`     | `240`                                                                | Duración máxima de un turno (el front espera hasta 270 s)                                                                          |
+| `MAX_SOLICITUDES_MINUTO` | `20`                                                                 | Límite de mensajes por minuto e IP (responde 429 con `Retry-After`)                                                                |
 | `PORT`                   | `3000`                                                               | Puerto HTTP (Railway lo asigna)                                                                                                    |
 
 `.env.example` es la referencia completa. El único proveedor es Google Gemini; `GET /api/health` muestra el proveedor y el modelo en uso.
@@ -75,7 +104,7 @@ Hooks de git: lint y formato al commitear, mensaje validado con commitlint, tipo
 | `GET`  | `/api/health`       | —                                           | `{ "ok": true, "provider", "model" }` (sin claves)                                                                                      |
 | `GET`  | `/api/casos`        | —                                           | `{ "casos": [{ "caso", "solicitud_id", "descripcion", "proveedor", "valor_total", "moneda", "centro_costo", "estado", "numero_oc" }] }` |
 
-Ejemplo de `resumen`: `"apta · bloqueos: ninguna · confirmaciones: RC5"`. `GET /api/casos` alimenta la bandeja del front y es de solo lectura: `estado` es `sin_procesar`, `pendiente`, `bloqueada` o `creada`, según la última fila de `out/control.csv` de cada solicitud; si SAP ya tiene una orden para la solicitud, gana `creada` con su `numero_oc`. Los casos con paquete ilegible se omiten. Las rutas viven en `RUTAS_API` (`src/comun/rutas-api.ts`), compartidas por back y front. `sessionId` debe ser un UUID y `message` tener entre 1 y 4000 caracteres. Cuerpo inválido o JSON roto → `400`; cuerpo de más de 32 kb → `413`; ruta `/api/*` inexistente → `404`; más de `MAX_SOLICITUDES_MINUTO` mensajes por minuto e IP → `429` con cabecera `Retry-After`; error inesperado → `500` con un mensaje genérico (sin trazas). Los errores del modelo o de una herramienta llegan como `reply` con `esError: true` y la sesión sigue activa.
+Ejemplo de `resumen`: `"apta · bloqueos: ninguna · confirmaciones: RC5"`. `GET /api/casos` es de solo lectura y alimenta las sugerencias del estado vacío y el panel de solicitudes del front: `estado` es `sin_procesar`, `pendiente`, `bloqueada` o `creada`, según la última fila de `out/control.csv` de cada solicitud; si SAP ya tiene una orden para la solicitud, gana `creada` con su `numero_oc`. Los casos con paquete ilegible se omiten. Las rutas viven en `RUTAS_API` (`src/comun/rutas-api.ts`), compartidas por back y front. `sessionId` debe ser un UUID y `message` tener entre 1 y 4000 caracteres. Cuerpo inválido o JSON roto → `400`; cuerpo de más de 32 kb → `413`; ruta `/api/*` inexistente → `404`; más de `MAX_SOLICITUDES_MINUTO` mensajes por minuto e IP → `429` con cabecera `Retry-After`; error inesperado → `500` con un mensaje genérico (sin trazas). Los errores del modelo o de una herramienta llegan como `reply` con `esError: true` y la sesión sigue activa.
 
 ## Arquitectura
 
@@ -102,7 +131,7 @@ src/
 ├── sap/                          puerto SapAdapter y SAP simulado
 ├── comun/                        resultado, errores, reloj, registrador, contratos y rutas
 └── knowledge/ordenes-compra.md   conocimiento del proceso
-web/                              chat: React 19, Vite, Tailwind, TanStack Query, axios
+web/                              chat primero: React 19, Vite, Tailwind, TanStack Query, axios
 pruebas/                          tests del back (los del front van junto a cada componente)
 fixtures/reto-03/                 insumos del reto (solo lectura)
 modulo/                           bonus: agente empaquetado para otras plataformas
@@ -121,7 +150,7 @@ Railway con configuración como código (`railway.json`): build por defecto de R
 ## Bonus: módulo reutilizable (`modulo/`)
 
 - `modulo/agent.md`: frontmatter (`description`, `mode: primary`, `permission: {edit: deny, bash: deny}`) y el contenido de `agent/prompt.md`.
-- `modulo/tools/oc.ts`: re-exporta solo las 6 herramientas de `src/tools/oc.ts` (las 5 P0 y `oc_leer_excel`) (las mismas, no una copia).
+- `modulo/tools/oc.ts`: re-exporta solo las 6 herramientas de `src/tools/oc.ts` (las 5 P0 y `oc_leer_excel`); son las mismas, no una copia.
 - `modulo/skill/ordenes-compra/SKILL.md`: frontmatter (`name`, `description`) y el contenido de `src/knowledge/ordenes-compra.md`.
 
 `pruebas/modulo.test.ts` falla si alguna copia diverge de su fuente.
