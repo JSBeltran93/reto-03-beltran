@@ -26,7 +26,7 @@ Reglas para cualquier sesión de Claude Code que trabaje en este repositorio.
 
 ## Contratos que no se cambian (PRD)
 
-- Herramientas `oc_leer_paquete`, `oc_validar`, `oc_construir_payload`, `oc_generar_evidencia`, `oc_crear` con las entradas y salidas del PRD §6.2; `description` de una frase; `args` zod con `.describe()`; `execute` devuelve JSON `{ok, data}` o `{ok: false, error}` y nunca lanza.
+- Seis herramientas: las P0 `oc_leer_paquete`, `oc_validar`, `oc_construir_payload`, `oc_generar_evidencia`, `oc_crear` y la P1 `oc_leer_excel`, con las entradas y salidas del PRD §6.2; `description` de una frase; `args` zod con `.describe()`; `execute` devuelve JSON `{ok, data}` o `{ok: false, error}` y nunca lanza.
 - `Paquete` (§7.2), `OrdenCompra` (§7.4) y `SapAdapter` (§7.4) literales.
 - API §6.4: `POST /api/chat`, `GET /api/sessions/:id`, `GET /api/health` (más la extensión de solo lectura `GET /api/casos`).
 - `out/control.csv`: `solicitud_id,resultado,numero_oc,retroactiva,bloqueos,confirmaciones,ts`; una fila por intento: cada llamada a `oc_crear` (`creada`, `idempotente`, `bloqueada` o `pendiente`) y cada validación bloqueada de `oc_validar`, porque un caso bloqueado nunca llega a `oc_crear`.
@@ -59,8 +59,9 @@ Reglas para cualquier sesión de Claude Code que trabaje en este repositorio.
 
 ## Front
 
+- **Chat primero** (PRD §6.1): conversación centrada con compositor abajo; estado vacío con sugerencias desde `GET /api/casos`; cada llamada a herramienta en línea (etiqueta humana, nombre técnico, argumentos compactos, resultado resumido; CA4); confirmación resaltada con los dos valores y botones "Sí, crear la OC" / "No, cancelar" (CA3); solicitudes en un panel plegable; en móvil solo el chat y un botón de solicitudes. No volver a una bandeja como vista principal.
 - React 19 + Vite + Tailwind v4; tokens en `@theme` de `web/src/estilos.css`; modo oscuro con `dark:`.
-- Datos remotos con TanStack Query (`useMutation` para el chat, `useQuery` para la salud) y axios como cliente HTTP.
+- Datos remotos con TanStack Query (`useMutation` para el chat, `useQuery` para la salud, la sesión y las solicitudes) y axios como cliente HTTP.
 - Componentes presentacionales; accesibilidad: `aria-live` en el historial, foco visible, contraste AA, labels.
 - Markdown con `react-markdown` + `remark-gfm`; nunca `dangerouslySetInnerHTML`.
 
