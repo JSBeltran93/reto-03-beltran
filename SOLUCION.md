@@ -1,20 +1,20 @@
 # SOLUCIÓN — Reto 03 "Órdenes de Compra SAP"
 
-| Campo          | Valor                                                                                                                                                                           |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Estado**     | Implementado                                                                                                                                                                    |
-| **Versión**    | 1.0                                                                                                                                                                             |
-| **Fecha**      | 2026-11-15                                                                                                                                                                      |
-| **Alcance**    | Agente conversacional de punta a punta: chat, ciclo del agente, cinco herramientas del PRD, SAP simulado, despliegue público                                                    |
-| **Enlaces**    | Link público: https://reto-03-beltran-production.up.railway.app · Repositorio: este repo (rama `develop`) · Decisiones: [`documentacion/decisiones/`](documentacion/decisiones) |
-| **Documentos** | [`README.md`](README.md) (operación) · [`CONTRIBUTING.md`](CONTRIBUTING.md) (desarrollo)                                                                                        |
+| Campo          | Valor                                                                                                                        |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Estado**     | Implementado                                                                                                                 |
+| **Versión**    | 1.0                                                                                                                          |
+| **Fecha**      | 2026-11-15                                                                                                                   |
+| **Alcance**    | Agente conversacional de punta a punta: chat, ciclo del agente, cinco herramientas del PRD, SAP simulado, despliegue público |
+| **Enlaces**    | Link público: https://reto-03-beltran-production.up.railway.app · Repositorio: este repo (rama `develop`)                    |
+| **Documentos** | [`README.md`](README.md) (operación) · [`CONTRIBUTING.md`](CONTRIBUTING.md) (desarrollo)                                     |
 
 ## Resumen
 
 - El agente lee el paquete de una solicitud de compra (correo, solicitud, cotización, aprobación, factura), aplica los controles **RC1–RC10** contra los maestros, muestra la OC como quedaría en SAP y la crea en un **SAP simulado** solo cuando corresponde.
 - Las decisiones de negocio son **deterministas y viven en código**; el modelo orquesta herramientas, explica y pregunta. Por eso `demo.ts` y más de 220 tests corren sin clave.
 - La confirmación humana (CA3) la **exige el ciclo**, no solo el prompt: el modelo no puede confirmar por el usuario ni alterar el payload validado.
-- El front (React + TanStack Query) muestra cada llamada a herramienta, la OC en tabla y una tarjeta de confirmación destacada.
+- El front (React + TanStack Query) es una **bandeja de la analista**: las solicitudes con su estado (creada, pendiente, bloqueada, sin procesar) a la izquierda y, al abrir una, "Procesar", los pasos del agente, la OC como documento y una tarjeta de confirmación destacada.
 - Si el modelo principal falla, un **modelo de respaldo** atiende el turno; si ambos fallan, el usuario recibe un error claro y la sesión sigue viva.
 
 ## Objetivos
@@ -44,15 +44,15 @@ La analista administrativa digita a mano cada OC en SAP y valida de memoria qui�
 
 ## 2. Arquitectura
 
-Capas con **puertos y adaptadores** alrededor de un dominio puro ([ADR-0001](documentacion/decisiones/0001-puertos-y-adaptadores.md)).
+Capas con **puertos y adaptadores** alrededor de un dominio puro. El proveedor del modelo vive detrás del puerto `AdaptadorLlm`: `src/llm/gemini.ts` (Google Gemini), `src/llm/respaldo.ts` (modelo principal → respaldo) y `src/llm/fabrica.ts`, que los compone a partir de la configuración.
 
 ```mermaid
 flowchart LR
   subgraph Front["web/ — React + Tailwind + TanStack Query + axios"]
-    UI[Chat: historial, tarjetas de herramientas, tabla de OC, confirmación]
+    UI[Bandeja de solicitudes + conversación: pasos del agente, OC como documento, confirmación]
   end
   subgraph Back["src/server.ts — Express (crearAplicacion)"]
-    API["/api/chat · /api/sessions/:id · /api/health"]
+    API["POST /api/chat · GET /api/sessions/:id · GET /api/health · GET /api/casos"]
     Ciclo["src/agente/ — ciclo · confirmación · sesiones · registro de herramientas · bitácora"]
   end
   subgraph Puertos
@@ -63,7 +63,7 @@ flowchart LR
   Dominio["src/tools/oc/ — esquemas · extractores · reglas RC1–RC10 · payload · evidencia · registro de control"]
   UI -- "HTTP JSON (contratos zod compartidos)" --> API --> Ciclo
   Ciclo --> LLM
-  LLM --> Anthropic["anthropic.ts + respaldo"]
+  LLM --> Fabrica["fabrica.ts"] --> Respaldo["respaldo.ts: 3.6 Flash → 3.5 Flash-Lite"] --> Gemini["gemini.ts — @google/genai"]
   Ciclo --> Tools --> Dominio --> SAP --> Mock["mock.ts — SapSimulado"]
   Dominio -. lee .-> Fixtures[(fixtures/reto-03)]
   Dominio -. escribe .-> Out[(out/: control.csv, log.jsonl, sap/ordenes.jsonl, caso/…)]
@@ -76,13 +76,13 @@ flowchart LR
 | **Ejecución** (herramientas y reglas) | `src/tools/oc.ts` + `src/tools/oc/`                                                                                                                                            |
 | Raíz de composición                   | `src/server.ts` compone las dependencias reales del servidor; `src/tools/oc.ts` expone una instancia por defecto (SAP simulado + reloj del sistema) para `demo.ts` y `modulo/` |
 
-Reglas de dependencia: el dominio no importa Express, el SDK ni el ciclo; el SAP y el reloj se inyectan con una fábrica de herramientas, así tests y demo son deterministas.
+Reglas de dependencia: el dominio no importa Express, el SDK de Gemini ni el ciclo; solo `src/llm/gemini.ts` importa `@google/genai`; el SAP y el reloj se inyectan con una fábrica de herramientas, así tests y demo son deterministas.
 
 ## 3. Ciclo del agente
 
 `src/agente/ciclo.ts` (`ejecutarTurno`), bucle manual de tool use:
 
-1. Toma el **candado de la sesión**: los turnos de una misma sesión se ejecutan en orden; un doble clic o un reintento nunca intercala mensajes ni rompe el par `tool_use`/`tool_result`.
+1. Toma el **candado de la sesión**: los turnos de una misma sesión se ejecutan en orden; un doble clic o un reintento nunca intercala mensajes ni rompe el par llamada/resultado de herramienta.
 2. Registra el mensaje del usuario y actualiza la **compuerta de confirmación**: solo una confirmación corta y completa ("confirmo", "sí, procede"…) otorga el caso pendiente más reciente, y solo para ese turno. Mensajes con reservas ("ok, pero…", "no", "todavía", "antes", "primero") no confirman. Si hay varios casos pendientes, se confirma el más reciente y la tarjeta del front muestra cuál es (`casoPendiente`).
 3. Envía la conversación al puerto LLM (`enviar`) con las 5 herramientas en JSON Schema, derivado de los mismos esquemas zod.
 4. Revisa el motivo de fin: una respuesta truncada por límite de tokens no ejecuta llamadas; un rechazo del modelo se informa con un mensaje explícito.
@@ -99,7 +99,7 @@ sequenceDiagram
   A->>F: "Procesa sol-004 y no la crees hasta que confirme"
   F->>C: POST /api/chat
   C->>M: enviar(mensajes, herramientas)
-  M-->>C: tool_use: oc_leer_paquete → oc_validar (RC5) → oc_construir_payload → oc_generar_evidencia
+  M-->>C: llamadas: oc_leer_paquete → oc_validar (RC5) → oc_construir_payload → oc_generar_evidencia
   C->>H: ejecuta cada herramienta (args validados con zod)
   H-->>C: resultados (caso pendiente = sol-004)
   C->>M: enviar(mensajes + resultados)
@@ -109,7 +109,7 @@ sequenceDiagram
   F->>C: POST /api/chat
   Note over C: la compuerta otorga sol-004 solo para este turno
   C->>M: enviar(mensajes)
-  M-->>C: tool_use: oc_crear(confirmado = true)
+  M-->>C: llamada: oc_crear(confirmado = true)
   C->>H: oc_crear (autorizado por la compuerta)
   H-->>C: numero_oc 4500000002 + ruta de evidencia
   C->>M: enviar(mensajes + resultado)
@@ -117,34 +117,46 @@ sequenceDiagram
   C-->>F: reply + needsConfirmation = false
 ```
 
-| Regla                      | Implementación                                                                                                                                                                                                                                                          |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CA1 tope de iteraciones    | `MAX_ITERACIONES` (25). Al alcanzarlo, una última llamada con la opción `sinLlamadas` del puerto (en Anthropic: las mismas herramientas con `tool_choice: none`) pide resumir lo hecho y lo pendiente. Además, `MAX_SEGUNDOS_TURNO` limita la duración total del turno. |
-| CA2 sin valores inventados | El prompt lo prohíbe y el diseño lo hace innecesario: `oc_validar` y `oc_crear` recalculan todo desde los documentos ([ADR-0003](documentacion/decisiones/0003-revalidacion-en-servidor.md)).                                                                           |
-| CA3 confirmación humana    | `oc_crear` con `confirmado: true` sin confirmación del usuario devuelve `CONFIRMACION_NO_OTORGADA` ([ADR-0002](documentacion/decisiones/0002-confirmacion-en-el-ciclo.md)). `needsConfirmation` sale de ese estado, no del texto.                                       |
-| CA4 trazabilidad           | Cada llamada aparece en el chat (línea de tiempo con nombre, argumentos y resultado) y en `out/log.jsonl`.                                                                                                                                                              |
-| CA5 errores claros         | Timeouts, límites, clave inválida (`LLM_CLAVE_INVALIDA`) y solicitudes rechazadas (`LLM_SOLICITUD_INVALIDA`) se traducen a español y se registran con status y tipo (sin secretos); la respuesta lleva `esError: true`.                                                 |
-| Costo                      | Topes de tokens por sesión (`MAX_TOKENS_SESION`) y por día (`MAX_TOKENS_DIA`), límite de solicitudes por IP (`MAX_SOLICITUDES_MINUTO`, 429 con `Retry-After`) y sesiones desalojadas por uso reciente (LRU).                                                            |
+| Regla                      | Implementación                                                                                                                                                                                                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| CA1 tope de iteraciones    | `MAX_ITERACIONES` (25). Al alcanzarlo, una última llamada con la opción `sinLlamadas` del puerto (en Gemini: las mismas herramientas con `functionCallingConfig.mode = NONE`) pide resumir lo hecho y lo pendiente. Además, `MAX_SEGUNDOS_TURNO` limita la duración total del turno. |
+| CA2 sin valores inventados | El prompt lo prohíbe y el diseño lo hace innecesario: `oc_validar`, `oc_construir_payload` y `oc_crear` recalculan todo desde los documentos (ver §5, "Los argumentos del modelo no son fuente de datos").                                                                           |
+| CA3 confirmación humana    | `oc_crear` con `confirmado: true` sin confirmación del usuario devuelve `CONFIRMACION_NO_OTORGADA`. `needsConfirmation` sale de ese estado, no del texto.                                                                                                                            |
+| CA4 trazabilidad           | Cada llamada aparece en el chat (línea de tiempo con nombre, argumentos y resultado) y en `out/log.jsonl`.                                                                                                                                                                           |
+| CA5 errores claros         | Timeouts, límites, clave inválida (`LLM_CLAVE_INVALIDA`) y solicitudes rechazadas (`LLM_SOLICITUD_INVALIDA`) se traducen a español y se registran con status y tipo (sin secretos); la respuesta lleva `esError: true`.                                                              |
+| Costo                      | Topes de tokens por sesión (`MAX_TOKENS_SESION`) y por día (`MAX_TOKENS_DIA`), límite de solicitudes por IP (`MAX_SOLICITUDES_MINUTO`, 429 con `Retry-After`) y sesiones desalojadas por uso reciente (LRU).                                                                         |
 
 ## 4. Elección del modelo
 
-- **Proveedor y modelo:** Anthropic `claude-opus-5-5`, esfuerzo `low`, `tool_choice: auto`, caché de prompt en el system prompt y las herramientas ([ADR-0005](documentacion/decisiones/0005-eleccion-del-modelo.md)).
-- **Por qué:** el modelo solo orquesta herramientas, explica y pregunta; importa la fiabilidad en tool use más que el razonamiento profundo, por eso esfuerzo bajo.
-- **Costo estimado por caso:** ~5–6 llamadas, ~40 K tokens de entrada acumulados y ~3 K de salida. A USD 4 / USD 20 por millón: **≈ USD 0,22 sin caché y ≈ USD 0,10 con caché**. A 40 OC al mes, menos de USD 10.
-- **Cambio de modelo:** variable `LLM_MODELO`; cambiar de proveedor es un adaptador nuevo del puerto `AdaptadorLlm`.
+- **Proveedor y modelo:** Google Gemini (único proveedor), `gemini-3.6-flash` como principal (`LLM_MODELO`) y `gemini-3.5-flash-lite` como respaldo (`LLM_MODELO_RESPALDO`), con el SDK `@google/genai`, llamadas a funciones en modo `AUTO` y ciclo manual en el servidor.
+- **Por qué:**
+  - La clave es gratuita y se obtiene al instante en Google AI Studio (https://aistudio.google.com/apikey): cualquiera puede levantar el proyecto sin cuenta de pago.
+  - Buen uso de herramientas (_function calling_) con esquemas JSON derivados de zod, que es lo único que el agente necesita del modelo.
+  - Ventana de contexto amplia: el historial completo de un caso (paquete, validación, payload, trazabilidad) cabe sin recortes.
+  - Las decisiones de negocio son deterministas y viven en las herramientas (RC1–RC10, payload, idempotencia); el modelo solo orquesta, explica y pregunta, así que no se necesita el modelo más caro del mercado y Flash sirve de respaldo digno.
+- **Costo estimado por caso procesado:** ~5–6 llamadas al modelo, ~40 K tokens de entrada acumulados (el historial se reenvía en cada llamada) y ~3 K de salida. Con los precios de lista de pago de la Gemini API (prompts ≤ 200 K tokens; el plan gratuito no cobra, pero tiene límites de solicitudes por minuto y por día):
+
+| Modelo                             | Entrada                     | Salida                      | Total por caso | 40 OC al mes |
+| ---------------------------------- | --------------------------- | --------------------------- | -------------- | ------------ |
+| `gemini-3.6-flash` (principal)     | 40 000 × 1,50 / 1 M = 0,060 | 3 000 × 7,50 / 1 M = 0,0225 | **≈ USD 0,08** | ≈ USD 3,30   |
+| `gemini-3.5-flash-lite` (respaldo) | 40 000 × 0,30 / 1 M = 0,012 | 3 000 × 2,50 / 1 M = 0,0075 | **≈ USD 0,02** | ≈ USD 0,78   |
+
+Precios de lista del plan de pago de la Gemini API, en USD por millón de tokens (noviembre de 2026): 3.6 Flash 1,50 entrada / 7,50 salida; 3.5 Flash-Lite 0,30 entrada / 2,50 salida. Los tokens de razonamiento se facturan como salida, así que los 3 K de salida son un piso: con el doble de salida, el principal queda en ≈ USD 0,10 por caso. Con la clave gratuita de AI Studio no hay cobro, pero sí límites de solicitudes; los modelos Pro (`gemini-3.1-pro-preview`) no tienen cuota gratuita y `gemini-2.5-*` ya no se ofrece a cuentas nuevas, por eso se eligió Flash. No se usa caché explícita de contexto.
+
+- **Cambio de modelo o de proveedor:** el modelo se cambia con `LLM_MODELO` / `LLM_MODELO_RESPALDO`. El proveedor queda aislado detrás del puerto `AdaptadorLlm` (PRD §6.1): cambiarlo es escribir otro adaptador en `src/llm/` y componerlo en `src/llm/fabrica.ts`, sin tocar el ciclo, las herramientas ni el front. La elección vigente se lee en `GET /api/health` (`provider: "gemini"`, `model`).
 
 ### Respaldo del modelo
 
-El PRD no lo exige; se agregó porque un link público no debe depender de un solo modelo ([ADR-0006](documentacion/decisiones/0006-respaldo-del-modelo.md)).
+El PRD no lo exige; se agregó porque un link público no debe depender de un solo modelo. Principal y respaldo son del mismo proveedor (3.6 Flash → 3.5 Flash-Lite).
 
-| Situación del modelo principal                         | Comportamiento                                                                                                                                                                                                                                  |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Timeout, límite de solicitudes, no disponible, rechazo | `AdaptadorConRespaldo` reintenta el mismo turno con `LLM_MODELO_RESPALDO` (`claude-sonnet-5-5`); un `stop_reason: refusal` se traduce a `LLM_RECHAZO` y activa el respaldo; el SDK reintenta 1 vez (`maxRetries: 1`) antes de pasar al respaldo |
-| Clave inválida o solicitud inválida                    | No se usa el respaldo (fallaría igual); error claro con su código                                                                                                                                                                               |
-| Principal y respaldo fallan                            | Error claro con `esError: true`; la sesión sigue viva                                                                                                                                                                                           |
-| Sin modelo en absoluto                                 | Las herramientas deterministas siguen disponibles: `npm run demo` procesa los 6 casos                                                                                                                                                           |
+| Situación del modelo principal                               | Comportamiento                                                                                                                                                                                                                    |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Timeout, límite de solicitudes (429), no disponible, rechazo | `AdaptadorConRespaldo` reintenta el mismo turno con `LLM_MODELO_RESPALDO` (`gemini-3.5-flash-lite`); un fin por seguridad o contenido bloqueado (`SAFETY`, `PROHIBITED_CONTENT`…) se traduce a `LLM_RECHAZO` y activa el respaldo |
+| Clave inválida o solicitud inválida                          | No se usa el respaldo (fallaría igual); error claro con su código                                                                                                                                                                 |
+| Principal y respaldo fallan                                  | Error claro con `esError: true`; la sesión sigue viva                                                                                                                                                                             |
+| Sin modelo en absoluto                                       | Las herramientas deterministas siguen disponibles: `npm run demo` procesa los 6 casos                                                                                                                                             |
 
-El respaldo es otro adaptador del mismo puerto: el ciclo no cambia. El parámetro `fallbacks` del SDK existe solo en `client.beta.messages` (beta `server-side-fallback-2026-07-01`) y solo cubre rechazos, no timeouts, 429 ni caídas; por eso se usa un adaptador propio.
+El respaldo es otro adaptador del mismo puerto: el ciclo no cambia. Al pasar al respaldo se descarta el contenido propio del principal (firmas de razonamiento) y el turno se reconstruye con texto y llamadas.
 
 ## 5. Matriz de controles
 
@@ -174,7 +186,9 @@ Resultado sobre los fixtures (verificado por `demo.ts` y `pruebas/matriz-resulta
 | sol-005 | O4       | Pide confirmación (retroactiva); tras confirmar, OC `4500000003` con `retroactiva=true` en control                                                                                                                   |
 | sol-006 | O3       | Pide confirmación del IVA derivado C1; condiciones Z030 derivadas                                                                                                                                                    |
 
-`out/control.csv` no se infla: la fila `pendiente` la escribe `oc_construir_payload` (no cada `oc_validar`), las filas consecutivas idénticas de una misma `solicitud_id` se omiten y el indicador de retroactivas cuenta `solicitud_id` distintos; la trazabilidad usa el vocabulario del PRD (`solicitud`, `cotizacion`, `maestro.<nombre>`, `derivado`) y cubre todos los campos; si falta la evidencia, `oc_crear` la genera antes de crear la OC.
+`out/control.csv` recibe una fila por intento (HU-5): cada llamada a `oc_crear` agrega su resultado (`creada`, `idempotente`, `bloqueada` o `pendiente`) con la marca `retroactiva`, y `oc_validar` registra el intento `bloqueada` de los casos con bloqueos, que nunca llegan a `oc_crear` porque no hay payload que enviar. Validar un caso apto o construir el payload no escribe en el control. La trazabilidad usa el vocabulario del PRD (`solicitud`, `cotizacion`, `maestro.<nombre>`, `derivado`) y cubre todos los campos; si falta la evidencia, `oc_crear` la genera antes de crear la OC.
+
+**Los argumentos del modelo no son fuente de datos.** `oc_validar` y `oc_construir_payload` reciben `paquete` y `derivados` porque el contrato del PRD §6.2 lo fija, pero releen el caso desde disco y validan y construyen con esos documentos; si el `paquete` recibido difiere, `oc_validar` lo informa en `aviso`. `oc_crear` vuelve a reconstruir el payload desde los documentos y compara su huella canónica (`src/comun/huella.ts`) con la del `payload` recibido: si no coinciden responde `PAYLOAD_ALTERADO` y no crea nada. Así el modelo no puede alterar un dato (CA2), lo que mitiga el riesgo del PRD §10 de que "el modelo arregle un monto".
 
 **La más difícil:** RC2/RC3. No basta con decir "no autorizado": la regla cruza el maestro para decir dónde sí aprueba esa persona y quién cubre el monto. En sol-003 eso revela que probablemente el centro de costo está mal (la aprobación menciona "preventa").
 
@@ -229,37 +243,39 @@ Una OC creada después de la factura deja de ser un control preventivo y se vuel
 
 **Qué le diría a la dirección:**
 
-1. **Medir antes de decidir:** `out/control.csv` registra cada intento con `retroactiva`; el indicador cuenta `solicitud_id` distintos, no filas. Indicador mensual: % de OC retroactivas y monto asociado, por centro de costo y solicitante.
+1. **Medir antes de decidir:** `out/control.csv` registra cada llamada a `oc_crear` con `retroactiva`; el indicador debe contar `solicitud_id` distintos, no filas. Indicador mensual: % de OC retroactivas y monto asociado, por centro de costo y solicitante.
 2. **Política "sin OC no hay pago"**, con una vía de excepción explícita: una OC retroactiva requiere aprobación de un nivel superior y queda marcada.
 3. **Segregación de funciones:** quien solicita no crea su propia OC; el agente puede detectarlo comparando solicitante y analista.
 4. **Aprobación por monto exacto:** la aprobación debe cubrir el valor a pagar (cotización), no solo el estimado.
 
 ## 8. Decisiones y trade-offs
 
-| Decisión                                                                                                                       | Alternativa descartada                         | Por qué                                                                               |
-| ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Puertos y adaptadores con dominio puro ([ADR-0001](documentacion/decisiones/0001-puertos-y-adaptadores.md))                    | Todo en `server.ts`                            | Probar reglas y ciclo sin HTTP ni clave; cambiar proveedor o SAP sin tocar el ciclo   |
-| Confirmación aplicada en el ciclo ([ADR-0002](documentacion/decisiones/0002-confirmacion-en-el-ciclo.md))                      | Solo instrucción en el prompt                  | Verificable y resistente a errores del modelo o inyección en los documentos           |
-| Revalidación desde los documentos y huella del payload ([ADR-0003](documentacion/decisiones/0003-revalidacion-en-servidor.md)) | Confiar en `paquete` y `payload` del modelo    | Mitiga el riesgo del PRD §10 sin cambiar el contrato                                  |
-| Bucle manual de tool use                                                                                                       | Tool runner del SDK                            | El PRD evalúa el ciclo; control explícito de CA1–CA5                                  |
-| Node 22 + Express 5 + React 19 + Tailwind ([ADR-0004](documentacion/decisiones/0004-tecnologias-node-express-react.md))        | Bun; HTML plano                                | Hosting estándar, testabilidad, componentes accesibles                                |
-| TanStack Query + axios en el front                                                                                             | `fetch` con un reducer propio                  | Carga, error, reintento y caché declarativos; cliente HTTP con interceptores          |
-| Modelo de respaldo como adaptador del puerto ([ADR-0006](documentacion/decisiones/0006-respaldo-del-modelo.md))                | Un solo modelo                                 | El link sigue respondiendo ante caídas o límites del modelo principal                 |
-| Despliegue en Railway con configuración como código ([ADR-0007](documentacion/decisiones/0007-despliegue-en-railway.md))       | Despliegue manual                              | Build, arranque y health check versionados; un push a `develop` despliega             |
-| Candado por sesión                                                                                                             | Responder 409 si la sesión está ocupada        | No se pierde el mensaje ni se rompe el par `tool_use`/`tool_result`                   |
-| `sessionId` UUID y rutas compartidas (`RUTAS_API`)                                                                             | Texto libre y rutas repetidas                  | Ids no adivinables y un solo lugar para las rutas                                     |
-| Español en todo el código salvo los nombres que fija el PRD; constantes centralizadas                                          | Identificadores en inglés; literales repetidos | Alineación literal con el PRD; sin _magic strings_ ni _magic numbers_                 |
-| TypeScript 6 y ESLint 9                                                                                                        | TypeScript 7 / ESLint 10 / oxlint              | `typescript-eslint` y `jsx-a11y` aún no los soportan                                  |
-| tsx en producción; sesiones en memoria                                                                                         | Compilar el backend; base de datos             | Sin paso de build (lo cubre el health check); la base de datos es no-objetivo del PRD |
+| Decisión                                                                                                                | Alternativa descartada                                   | Por qué                                                                                                                                       |
+| ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Puertos y adaptadores con dominio puro (`AdaptadorLlm`, `SapAdapter`; SAP y reloj inyectados con `crearHerramientasOc`) | Todo en `server.ts`                                      | Probar reglas y ciclo sin HTTP ni clave; cambiar proveedor o SAP sin tocar el ciclo                                                           |
+| Confirmación aplicada en el ciclo (`src/agente/confirmacion.ts`)                                                        | Solo instrucción en el prompt                            | Verificable y resistente a errores del modelo o inyección en los documentos; la herramienta conserva su contrato y `demo.ts` la llama directo |
+| Revalidación desde los documentos y huella del payload (`PAYLOAD_ALTERADO`)                                             | Confiar en `paquete`, `derivados` y `payload` del modelo | Mitiga el riesgo del PRD §10 sin cambiar el contrato; cuesta releer el caso en cada herramienta                                               |
+| Google Gemini como único proveedor (`gemini-3.6-flash`, respaldo `gemini-3.5-flash-lite`)                               | Otros proveedores; varios proveedores a la vez           | Clave gratuita en AI Studio, buen _function calling_ y contexto amplio; un solo SDK y una sola clave que gestionar                            |
+| Bucle manual de llamadas a herramientas                                                                                 | Ciclo automático de llamadas del SDK                     | El PRD evalúa el ciclo; control explícito de CA1–CA5                                                                                          |
+| Node 22 + Express 5 + React 19 + Tailwind; npm workspaces                                                               | Bun; HTML plano                                          | Hosting estándar, testabilidad (`crearAplicacion` con supertest), componentes accesibles; un solo `npm install` y un solo `npm run dev`       |
+| TanStack Query + axios en el front                                                                                      | `fetch` con un reducer propio                            | Carga, error, reintento y caché declarativos; cliente HTTP con interceptores                                                                  |
+| Front como bandeja de la analista (`GET /api/casos`)                                                                    | Chat vacío con accesos rápidos                           | La analista trabaja una cola de solicitudes: ve qué falta, abre un caso y lo procesa; el chat queda para preguntas                            |
+| Modelo de respaldo como adaptador del puerto (`AdaptadorConRespaldo`)                                                   | Un solo modelo                                           | El link sigue respondiendo ante caídas, 429, timeouts o rechazos del principal                                                                |
+| Despliegue en Railway con configuración como código (`railway.json`)                                                    | Despliegue manual                                        | Build, arranque y health check versionados; un push a `develop` despliega; el disco es efímero                                                |
+| Candado por sesión                                                                                                      | Responder 409 si la sesión está ocupada                  | No se pierde el mensaje ni se rompe el par llamada/resultado de herramienta                                                                   |
+| `sessionId` UUID y rutas compartidas (`RUTAS_API`)                                                                      | Texto libre y rutas repetidas                            | Ids no adivinables y un solo lugar para las rutas                                                                                             |
+| Español en todo el código salvo los nombres que fija el PRD; constantes centralizadas                                   | Identificadores en inglés; literales repetidos           | Alineación literal con el PRD; sin _magic strings_ ni _magic numbers_                                                                         |
+| TypeScript 6 y ESLint 9                                                                                                 | TypeScript 7 / ESLint 10 / oxlint                        | `typescript-eslint` y `jsx-a11y` aún no los soportan                                                                                          |
+| tsx en producción; sesiones en memoria                                                                                  | Compilar el backend; base de datos                       | Sin paso de build (lo cubre el health check); la base de datos es no-objetivo del PRD                                                         |
 
-**Dependencias:** `express` (HTTP), `zod` (contratos, obligatorio), `@anthropic-ai/sdk` (modelo), `pdf-lib` (evidencia PDF, P1), `tsx` (ejecutar TypeScript), `react` + `react-dom` + `@tanstack/react-query` + `axios` + `react-markdown` + `remark-gfm` (front), `tailwindcss` + `@tailwindcss/vite` (estilos); en desarrollo: TypeScript, Vite + `@vitejs/plugin-react`, Vitest + `@vitest/coverage-v8`, Testing Library + `user-event` + `jest-dom` + `jsdom`, supertest, ESLint (typescript-eslint, react-hooks, react-refresh, jsx-a11y, simple-import-sort, eslint-config-prettier, globals), Prettier, Husky, lint-staged, commitlint, concurrently.
+**Dependencias:** `express` (HTTP), `zod` (contratos, obligatorio), `@google/genai` (SDK oficial de Gemini: _function calling_, timeout por solicitud y errores tipados `ApiError`; solo lo importa `src/llm/gemini.ts`), `pdf-lib` (evidencia PDF, P1), `tsx` (ejecutar TypeScript), `react` + `react-dom` + `@tanstack/react-query` + `axios` + `react-markdown` + `remark-gfm` (front), `tailwindcss` + `@tailwindcss/vite` (estilos); en desarrollo: TypeScript, Vite + `@vitejs/plugin-react`, Vitest + `@vitest/coverage-v8`, Testing Library + `user-event` + `jest-dom` + `jsdom`, supertest, ESLint (typescript-eslint, react-hooks, react-refresh, jsx-a11y, simple-import-sort, eslint-config-prettier, globals), Prettier, Husky, lint-staged, commitlint, concurrently.
 
 ## 9. Supuestos
 
 1. La sección 10 citada como rúbrica es "Riesgos, supuestos y preguntas abiertas" y no tiene puntaje; se priorizó lo que el PRD declara evaluado (§6).
 2. Con Node, el equivalente de `bun run demo.ts` es `npm run demo`.
 3. "Ausente" (HU-1) = adjunto declarado en `correo.adjuntos` sin su archivo normalizado; solicitud, cotización y aprobación siempre se esperan; la factura solo si se declara.
-4. "Cada intento" (HU-5): `oc_crear` registra creada, idempotente y pendiente; `oc_validar` registra bloqueada; `oc_construir_payload` registra pendiente (apto con confirmaciones). Filas consecutivas idénticas de una misma solicitud se omiten.
+4. "Cada intento" (HU-5) = cada llamada a `oc_crear` (fila `creada`, `idempotente`, `bloqueada` o `pendiente`) más cada validación bloqueada (fila `bloqueada`), porque un caso bloqueado no tiene payload y nunca llega a `oc_crear`. Validar un caso apto o construir el payload no escribe en el control.
 5. RC3 se evalúa contra el tope del aprobador en el centro de la solicitud; un aprobador ajeno al centro no tiene tope.
 6. Fechas comparadas por día calendario en la zona horaria del documento.
 7. `precio_unitario` = `valor_unitario` de la solicitud (IVA incluido); la conversión a neto pertenece al adaptador SAP real (§6).
@@ -272,37 +288,36 @@ Una OC creada después de la factura deja de ser un control preventivo y se vuel
 
 ## 10. Cobertura
 
-| Historia / requisito | Estado          | Nota                                                                                                                       | Falta para producción                              |
-| -------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| HU-1 Leer el paquete | Hecho           | Ausentes → `null` + `faltantes`; JSON roto o monto no numérico → error legible                                             | Lectura real de `.xlsx`, PDF y del buzón de correo |
-| HU-2 Validar         | Hecho           | RC1–RC10, derivados informados; códigos de IVA y pago verificados contra los maestros                                      | Maestros consultados en SAP en tiempo real         |
-| HU-3 Payload         | Hecho           | Esquema zod del PRD y `trazabilidad.json` con el vocabulario de fuentes del PRD                                            | Conversión a precio neto en el adaptador SAP real  |
-| HU-4 Evidencia       | Hecho (P0 y P1) | `aprobacion.txt` con sha256 y `aprobacion.pdf`                                                                             | Firma digital y adjunto vía Attachment Service     |
-| HU-5 Crear OC        | Hecho           | 4500000001+, `ordenes.jsonl`, idempotencia atómica (`idempotente: true` también en concurrencia), control sin inflación    | Adaptador SAP real y persistencia en base de datos |
-| HU-6 Errores         | Hecho           | Catálogo de códigos con acción sugerida; API con 400, 413, 404, 429 y 500 genérico                                         | Alertas y monitoreo centralizado                   |
-| Front (PRD §6.1)     | Hecho           | Línea de tiempo de llamadas, tabla de la OC con total y excepciones, tarjeta de confirmación con el caso, rehidratación    | Autenticación de usuarios                          |
-| Operación            | Hecho           | Respaldo del modelo, plazo por turno, límite por IP, sesiones LRU, CSP y HSTS, SAP y reloj inyectables                     | Volumen persistente o base de datos para `out/`    |
-| `oc_leer_excel` (P1) | No hecho        | Los fixtures traen la solicitud como JSON                                                                                  | Implementar la lectura de `.xlsx`                  |
-| Bonus `modulo/`      | Hecho           | `agent.md`, `tools/oc.ts` (exporta solo las 5 herramientas) y `skill/ordenes-compra/SKILL.md`; un test impide divergencias | Empaquetarlo sin depender de `../../src`           |
+| Historia / requisito | Estado          | Nota                                                                                                                                                                                                                                                                                                      | Falta para producción                                        |
+| -------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| HU-1 Leer el paquete | Hecho           | Ausentes → `null` + `faltantes`; JSON roto o monto no numérico → error legible                                                                                                                                                                                                                            | Lectura real de `.xlsx`, PDF y del buzón de correo           |
+| HU-2 Validar         | Hecho           | RC1–RC10, derivados informados; códigos de IVA y pago verificados contra los maestros                                                                                                                                                                                                                     | Maestros consultados en SAP en tiempo real                   |
+| HU-3 Payload         | Hecho           | Esquema zod del PRD y `trazabilidad.json` con el vocabulario de fuentes del PRD                                                                                                                                                                                                                           | Conversión a precio neto en el adaptador SAP real            |
+| HU-4 Evidencia       | Hecho (P0 y P1) | `aprobacion.txt` con sha256 y `aprobacion.pdf`                                                                                                                                                                                                                                                            | Firma digital y adjunto vía Attachment Service               |
+| HU-5 Crear OC        | Hecho           | 4500000001+, `ordenes.jsonl`, idempotencia atómica (`idempotente: true` también en concurrencia), una fila de control por intento (`oc_crear` y validación bloqueada)                                                                                                                                     | Adaptador SAP real y persistencia en base de datos           |
+| HU-6 Errores         | Hecho           | Catálogo de códigos con acción sugerida; API con 400, 413, 404, 429 y 500 genérico                                                                                                                                                                                                                        | Alertas y monitoreo centralizado                             |
+| Front (PRD §6.1)     | Hecho           | Bandeja con estado por caso (refrescada tras cada respuesta), "Procesar" con el mensaje del PRD §11, lista de pasos con detalle técnico, OC como documento con total y excepciones, confirmación con el caso y sus valores, rehidratación; dos paneles en escritorio y navegación bandeja → caso en móvil | Autenticación de usuarios y asignación de casos por analista |
+| Operación            | Hecho           | Respaldo del modelo, plazo por turno, límite por IP, sesiones LRU, CSP y HSTS, SAP y reloj inyectables                                                                                                                                                                                                    | Volumen persistente o base de datos para `out/`              |
+| `oc_leer_excel` (P1) | No hecho        | Los fixtures traen la solicitud como JSON                                                                                                                                                                                                                                                                 | Implementar la lectura de `.xlsx`                            |
+| Bonus `modulo/`      | Hecho           | `agent.md`, `tools/oc.ts` (exporta solo las 5 herramientas) y `skill/ordenes-compra/SKILL.md`; un test impide divergencias                                                                                                                                                                                | Empaquetarlo sin depender de `../../src`                     |
 
 **Para producción falta además:** autenticación y roles, y monitoreo de costo con alertas.
-
-**Mejoras de la ronda final de auditoría (implementadas):** compuerta CA3 que solo acepta confirmaciones cortas y completas; varios casos pendientes con el más reciente como confirmable; `control.csv` sin inflación; idempotencia concurrente que responde `idempotente: true`; RC6/RC7 verifican el código informado contra el maestro; negación de RC2 limitada a la misma oración. En el front: consulta periódica del historial tras un timeout, total y excepciones en la tabla de la OC, fecha formateada, sin imágenes remotas en el Markdown, cuenta regresiva de `Retry-After`, contenedor accesible del historial y bordes con contraste ≥ 3:1. `src/tools/oc/fixtures.ts` pasó a llamarse `insumos.ts`.
 
 ## 11. Uso de IA
 
 Asistente: **Claude Code (modelo Claude Opus 5.5)**, en terminal y VS Code. Todo el código fue revisado y se puede explicar línea por línea.
 
-| Momento              | Tarea                                                                           | Qué se aceptó                                                                                                                      | Qué se descartó o corrigió y por qué                                                                                     |
-| -------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Antes del reloj      | Análisis de los 3 retos y elección del reto 3                                   | Hallazgos de fixtures: sol-003 (centro de costo), sol-004 (aprobado por 25 M), sol-005 (segregación de funciones)                  | Un primer plan imponía stack y API distintos al PRD; se rehízo anclado al PRD                                            |
-| Antes del reloj      | Ensayo de los comandos de armado                                                | Detectó TypeScript 7 y ESLint 10 incompatibles con el lint con tipos y de accesibilidad                                            | Se descartó oxlint (sin reglas con tipos) a favor de ESLint 9                                                            |
-| Bloques 0–3          | Andamiaje por comandos, dominio, reglas, payload, evidencia, SAP simulado, demo | Reglas como objetos (abierto/cerrado) y revalidación en el servidor                                                                | —                                                                                                                        |
-| Bloque 4             | Puerto LLM, ciclo, compuerta de confirmación, API                               | Compuerta CA3 en el ciclo; LLM falso para probar sin clave                                                                         | El `fallbacks` del SDK solo existe en la API beta y solo cubre rechazos; se resolvió con un adaptador de respaldo propio |
-| Bloque 5             | Front de chat                                                                   | TanStack Query + axios a pedido del usuario                                                                                        | Se reemplazó el reducer con `fetch` de la primera versión                                                                |
-| Convención de idioma | Alineación con el PRD                                                           | Todo el código en español salvo los nombres que el PRD fija                                                                        | Una versión intermedia en inglés se descartó; el historial se rehízo limpio                                              |
-| Paralelismo          | Agentes en paralelo para back, front y documentación                            | Cada parte verificada con `npm run check` y la demo                                                                                | —                                                                                                                        |
-| Auditoría            | 4 auditorías en paralelo (PRD, back, front, documentación) y correcciones       | Cierre por tope con `tool_choice: none`, sesión que no se rompe, candado por sesión, idempotencia atómica, rehidratación del front | Documentos con datos personales o desactualizados se retiraron del árbol (plan previo, copia del PRD)                    |
+| Momento              | Tarea                                                                           | Qué se aceptó                                                                                                                               | Qué se descartó o corrigió y por qué                                                                          |
+| -------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Antes del reloj      | Análisis de los 3 retos y elección del reto 3                                   | Hallazgos de fixtures: sol-003 (centro de costo), sol-004 (aprobado por 25 M), sol-005 (segregación de funciones)                           | Un primer plan imponía stack y API distintos al PRD; se rehízo anclado al PRD                                 |
+| Antes del reloj      | Ensayo de los comandos de armado                                                | Detectó TypeScript 7 y ESLint 10 incompatibles con el lint con tipos y de accesibilidad                                                     | Se descartó oxlint (sin reglas con tipos) a favor de ESLint 9                                                 |
+| Bloques 0–3          | Andamiaje por comandos, dominio, reglas, payload, evidencia, SAP simulado, demo | Reglas como objetos (abierto/cerrado) y revalidación en el servidor                                                                         | —                                                                                                             |
+| Bloque 4             | Puerto LLM, ciclo, compuerta de confirmación, API                               | Compuerta CA3 en el ciclo; LLM falso para probar sin clave                                                                                  | El respaldo nativo del SDK no cubría timeouts, 429 ni caídas; se resolvió con un adaptador de respaldo propio |
+| Bloque 5             | Front de chat                                                                   | TanStack Query + axios a pedido del usuario                                                                                                 | Se reemplazó el reducer con `fetch` de la primera versión                                                     |
+| Convención de idioma | Alineación con el PRD                                                           | Todo el código en español salvo los nombres que el PRD fija                                                                                 | Una versión intermedia en inglés se descartó; el historial se rehízo limpio                                   |
+| Paralelismo          | Agentes en paralelo para back, front y documentación                            | Cada parte verificada con `npm run check` y la demo                                                                                         | —                                                                                                             |
+| Proveedor del modelo | Cambio a Google Gemini como único proveedor                                     | `gemini.ts` + `fabrica.ts`, respaldo 3.6 Flash → 3.5 Flash-Lite; el ciclo, las herramientas y el front no cambiaron                         | El adaptador del proveedor inicial y su SDK se retiraron: una sola clave, gratuita                            |
+| Auditoría            | 4 auditorías en paralelo (PRD, back, front, documentación) y correcciones       | Cierre por tope con una llamada sin herramientas, sesión que no se rompe, candado por sesión, idempotencia atómica, rehidratación del front | Documentos con datos personales o desactualizados se retiraron del árbol (plan previo, copia del PRD)         |
 
 ## 12. Riesgos y mitigación
 
@@ -312,15 +327,15 @@ Asistente: **Claude Code (modelo Claude Opus 5.5)**, en terminal y VS Code. Todo
 | Caída o límite del modelo                                      | Media        | Alto    | Modelo de respaldo, plazo por turno, errores claros; la demo funciona sin modelo                             |
 | Maestros desactualizados (proveedores, topes)                  | Media        | Medio   | Consultar SAP en tiempo real (`consultarProveedor`) y versionar la matriz de aprobación                      |
 | "Aprobado" en texto libre es evidencia débil                   | Alta         | Medio   | Firma digital o flujo con identidad verificable; hash SHA-256 de la evidencia                                |
-| Costo del modelo en un link público                            | Media        | Medio   | Topes por sesión y por día, límite por IP, límite de gasto en la consola                                     |
+| Costo del modelo en un link público                            | Media        | Medio   | Topes por sesión y por día, límite por IP, plan gratuito o límite de gasto en Google Cloud                   |
 | Disco efímero en Railway (`out/` se pierde al redesplegar)     | Alta         | Medio   | Volumen o base de datos en producción; la numeración y la idempotencia se reinician hoy                      |
 | Sesiones ajenas o turnos concurrentes                          | Baja         | Medio   | `sessionId` UUID, candado por sesión, doble envío bloqueado en el front                                      |
 | Conexión a SAP no viable                                       | Media        | Medio   | Plan B de archivo de carga y "OC lista para pegar"                                                           |
 
 ### Plan de despliegue y operación
 
-- **Railway** con configuración como código (`railway.json`): build por defecto de Railpack (instala dependencias y ejecuta `npm run build`), arranque `npm start`, health check en `/api/health` ([ADR-0007](documentacion/decisiones/0007-despliegue-en-railway.md)).
-- **Variables:** `ANTHROPIC_API_KEY` (solo en Railway, nunca en el repo), `LLM_MODELO`, `LLM_MODELO_RESPALDO`, topes y límites de `.env.example`; `PORT` lo asigna Railway.
+- **Railway** con configuración como código (`railway.json`): build por defecto de Railpack (instala dependencias y ejecuta `npm run build`), arranque `npm start`, health check en `/api/health`.
+- **Variables:** `GEMINI_API_KEY` (solo en Railway, nunca en el repo), `LLM_MODELO`, `LLM_MODELO_RESPALDO`, `LLM_TIMEOUT_MS`, `MAX_ITERACIONES`, `MAX_TOKENS_SESION`, `MAX_TOKENS_DIA`, `MAX_SESIONES`, `MAX_SEGUNDOS_TURNO` y `MAX_SOLICITUDES_MINUTO` (ver `.env.example`); `PORT` lo asigna Railway.
 - **Despliegue:** un push a `develop` despliega; alternativa equivalente con `railway up` desde la terminal o el CI.
 - **Verificación:** `/api/health` y el prompt del PRD §11 en el link público.
 
@@ -328,7 +343,7 @@ Asistente: **Claude Code (modelo Claude Opus 5.5)**, en terminal y VS Code. Todo
 
 - Logs del servidor en JSON (una línea por evento, sin secretos): arranque, errores del modelo con status y tipo, errores HTTP.
 - `out/log.jsonl`: cada llamada a herramienta con sesión, argumentos, resultado y duración (CA4).
-- `out/control.csv`: cada intento de OC con resultado y marca `retroactiva`, base del indicador para la dirección.
+- `out/control.csv`: una fila por intento (incluidos los bloqueados) con resultado y marca `retroactiva`, base del indicador para la dirección.
 
 ### Seguridad
 

@@ -7,7 +7,7 @@ Guía de desarrollo del agente de órdenes de compra (Reto 03).
 ```bash
 nvm use                # Node 22 (ver .nvmrc)
 npm install            # instala la raíz y el workspace web/; configura los hooks de git
-cp .env.example .env   # completar ANTHROPIC_API_KEY para usar el chat
+cp .env.example .env   # pegar GEMINI_API_KEY (https://aistudio.google.com/apikey) para usar el chat
 git config commit.template .gitmessage   # plantilla de mensajes de commit
 npm run dev            # back (tsx watch) + front (Vite) con un solo comando
 ```
@@ -23,15 +23,14 @@ npm run dev            # back (tsx watch) + front (Vite) con un solo comando
 | `src/tools/oc.ts`                 | Las cinco herramientas `oc_*` (contrato del PRD §6.2)                                                     |
 | `src/tools/oc/`                   | Dominio puro: esquemas, extractores, reglas RC1–RC10, validación, payload, evidencia, registro de control |
 | `src/sap/`                        | Puerto `SapAdapter` y simulador `SapSimulado`                                                             |
-| `src/llm/`                        | Puerto `AdaptadorLlm`, `AdaptadorAnthropic` y el adaptador de respaldo                                    |
+| `src/llm/`                        | Puerto `AdaptadorLlm`, `AdaptadorGemini`, el adaptador de respaldo y la fábrica que los compone           |
 | `src/agente/`                     | Ciclo del agente, compuerta de confirmación, sesiones, registro de herramientas, bitácora                 |
 | `src/comun/`                      | Resultado, catálogo de errores, reloj, registrador, huella, contratos de la API, rutas de `out/`          |
 | `src/server.ts`                   | API HTTP (`crearAplicacion`) y raíz de composición                                                        |
 | `web/`                            | Chat en React (TanStack Query + axios); sus tests van junto a cada componente                             |
 | `pruebas/`                        | Tests del back; `pruebas/dobles/` contiene el LLM falso                                                   |
-| `documentacion/decisiones/`       | Decisiones de arquitectura (ADR)                                                                          |
 
-Reglas de dependencia: el dominio (`src/tools/oc/`) nunca importa el ciclo del agente, el adaptador LLM ni Express. `src/server.ts` es el único lugar que compone las implementaciones reales.
+Reglas de dependencia: el dominio (`src/tools/oc/`) nunca importa el ciclo del agente, el adaptador LLM ni Express. `src/server.ts` es el único lugar que compone las implementaciones reales (el modelo, a través de `src/llm/fabrica.ts`).
 
 ## Idioma
 
@@ -102,12 +101,12 @@ No hace falta tocar el servidor, el ciclo del agente ni el front.
 ## Cómo cambiar de proveedor LLM
 
 1. Implementar `AdaptadorLlm` de `src/llm/adapter.ts` en un archivo nuevo dentro de `src/llm/`.
-2. Componerlo en `src/server.ts` según la configuración.
+2. Componerlo en `src/llm/fabrica.ts` (`crearAdaptadoresLlm`) y ajustar la clave en `src/configuracion.ts` y `.env.example`.
 3. El ciclo del agente, las herramientas y el front no cambian.
 
 ## Cómo registrar una decisión
 
-Cada decisión de arquitectura va en un ADR nuevo en `documentacion/decisiones/` con la plantilla: Estado, Fecha, Contexto, Decisión, Consecuencias (positivas y negativas) y Alternativas consideradas; se enlaza desde `SOLUCION.md` §8.
+Cada decisión de arquitectura se agrega como una fila en la tabla de `SOLUCION.md` §8: la decisión, la alternativa descartada y por qué.
 
 ## Definición de hecho
 
