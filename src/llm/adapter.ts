@@ -39,6 +39,15 @@ export interface HerramientaLlm {
 /** Motivo por el que el modelo terminó su respuesta. */
 export type FinRespuesta = "final" | "herramientas" | "limite" | "rechazo";
 
+/** Opciones de una consulta al modelo. */
+export interface OpcionesEnvio {
+  /**
+   * true para que el modelo responda solo con texto: las herramientas se envían igual
+   * (cambiarlas invalidaría el historial y la caché) pero no puede llamarlas.
+   */
+  readonly sinLlamadas?: boolean;
+}
+
 /** Respuesta del modelo en forma neutral. */
 export interface RespuestaLlm {
   readonly texto: string;
@@ -62,10 +71,12 @@ export interface AdaptadorLlm {
    * Envía la conversación y las herramientas disponibles al modelo.
    * @param mensajes - conversación, empezando por el system prompt
    * @param herramientas - herramientas que el modelo puede llamar
+   * @param opciones - p. ej. `sinLlamadas` para forzar una respuesta solo de texto
    * @returns la respuesta del modelo o un error LLM_*
    */
   enviar(
     mensajes: readonly MensajeLlm[],
     herramientas: readonly HerramientaLlm[],
+    opciones?: OpcionesEnvio,
   ): Promise<Resultado<RespuestaLlm>>;
 }
