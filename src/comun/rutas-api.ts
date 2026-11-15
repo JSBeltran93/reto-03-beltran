@@ -12,6 +12,7 @@ export const RUTAS_API = {
   sesionPatron: "/api/sessions/:id",
   /** GET: estado del servidor sin secretos. */
   salud: "/api/health",
+  casos: "/api/casos",
   /** Patrón de Express para cualquier ruta de la API no definida (responde 404). */
   desconocidaPatron: "/api/{*splat}",
 } as const;

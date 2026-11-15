@@ -1,67 +1,147 @@
 import { type DatosCreacion, type DatosPayload, totalOrden } from "../estado/resultados";
 import { CLASES, TONOS } from "./clases";
-import { formatearFecha, formatearNumero } from "./formato";
+import { formatearFecha, formatearMonto, formatearNumero } from "./formato";
 import { TEXTOS_ORDEN } from "./textos";
 
-function textoExcepciones(datos: DatosPayload): string {
-  const codigos = datos.orden.excepciones.map((e) => e.codigo);
-  return codigos.length > 0 ? codigos.join(", ") : TEXTOS_ORDEN.sinExcepciones;
-}
+type Orden = DatosPayload["orden"];
+
+/** Celdas numéricas alineadas a la derecha con cifras tabulares. */
+const CELDA_NUMERO = "px-3 py-2 text-right align-top tabular-nums whitespace-nowrap";
+const CELDA_ENCABEZADO = "px-3 py-2 text-xs font-semibold text-texto-suave";
 
 /**
- * Filas de la tabla de la OC propuesta, en el orden en que la analista las revisa.
- * @param datos - datos de `oc_construir_payload`
- * @returns pares etiqueta/valor
+ * Datos de cabecera de la OC, en el orden en que la analista los revisa.
+ * @param orden - orden de `oc_construir_payload`
+ * @returns pares etiqueta/valor (solo los que vienen en los datos)
  */
-function filasOrden(datos: DatosPayload): readonly (readonly [string, string])[] {
-  const { orden } = datos;
-  const [posicion] = orden.posiciones;
+function camposCabecera(orden: Orden): readonly (readonly [string, string])[] {
   const campos = TEXTOS_ORDEN.campos;
-  if (!posicion) return [];
-  return [
+  const filas: [string, string][] = [
     [
       campos.proveedor,
-      `${orden.proveedor.nombre} (SAP ${orden.proveedor.codigo_sap} · NIT ${orden.proveedor.nit})`,
+      `${orden.proveedor.nombre} · SAP ${orden.proveedor.codigo_sap} · NIT ${orden.proveedor.nit}`,
     ],
-    [campos.centro, `${posicion.centro_costo} / ${posicion.subarea}`],
-    [campos.descripcion, posicion.descripcion],
-    [campos.cantidad, `${formatearNumero(posicion.cantidad)} ${posicion.unidad}`],
-    [campos.precio, `${orden.moneda} ${formatearNumero(posicion.precio_unitario)}`],
-    [campos.iva, posicion.indicador_iva],
-    [campos.condiciones, orden.condiciones_pago],
     [campos.aprobador, orden.aprobador.email],
-    [campos.total, `${orden.moneda} ${formatearNumero(totalOrden(datos))}`],
-    [campos.excepciones, textoExcepciones(datos)],
+    [campos.condiciones, orden.condiciones_pago],
+    [TEXTOS_ORDEN.moneda, orden.moneda],
   ];
+  if (orden.sociedad && orden.organizacion_compras) {
+    filas.push([TEXTOS_ORDEN.sociedad, `${orden.sociedad} / ${orden.organizacion_compras}`]);
+  }
+  return filas;
 }
 
-/**
- * Tabla de la OC tal como quedaría en SAP (resultado de `oc_construir_payload`).
- * @param props - datos del payload
- * @returns la tabla
- */
-export function TablaOrden({ datos }: { readonly datos: DatosPayload }) {
+type Posicion = Orden["posiciones"][number];
+
+function FilaPosicion({
+  posicion: p,
+  moneda,
+}: {
+  readonly posicion: Posicion;
+  readonly moneda: string;
+}) {
+  const { campos } = TEXTOS_ORDEN;
   return (
-    <div className="overflow-x-auto rounded-xl border border-borde">
+    <tr className="border-b border-borde">
+      <td className="min-w-40 px-3 py-2 align-top">
+        <p className="wrap-anywhere">{p.descripcion}</p>
+        <p className="mt-0.5 text-xs text-texto-suave">
+          {campos.centro}: {p.centro_costo} / {p.subarea} · {campos.iva}: {p.indicador_iva}
+        </p>
+      </td>
+      <td className={CELDA_NUMERO}>{`${formatearNumero(p.cantidad)} ${p.unidad}`}</td>
+      <td className={CELDA_NUMERO}>{formatearMonto(p.precio_unitario, moneda)}</td>
+      <td className={CELDA_NUMERO}>{formatearMonto(p.cantidad * p.precio_unitario, moneda)}</td>
+    </tr>
+  );
+}
+
+function TablaPosiciones({ orden }: { readonly orden: Orden }) {
+  const { columnas } = TEXTOS_ORDEN;
+  return (
+    <div className="overflow-x-auto">
       <table className="w-full border-collapse text-left text-sm">
-        <caption className="bg-elevada px-3 py-2 text-left text-xs font-semibold">
-          {TEXTOS_ORDEN.titulo}
-        </caption>
+        <caption className="sr-only">{TEXTOS_ORDEN.posiciones}</caption>
+        <thead>
+          <tr className="border-b border-borde">
+            <th scope="col" className={CELDA_ENCABEZADO}>
+              {columnas.descripcion}
+            </th>
+            <th scope="col" className={`${CELDA_ENCABEZADO} text-right`}>
+              {columnas.cantidad}
+            </th>
+            <th scope="col" className={`${CELDA_ENCABEZADO} text-right`}>
+              {columnas.precio}
+            </th>
+            <th scope="col" className={`${CELDA_ENCABEZADO} text-right`}>
+              {columnas.subtotal}
+            </th>
+          </tr>
+        </thead>
         <tbody>
-          {filasOrden(datos).map(([etiqueta, valor]) => (
-            <tr key={etiqueta} className="border-t border-borde">
-              <th
-                scope="row"
-                className="w-40 px-3 py-2 align-top text-xs font-medium text-texto-suave"
-              >
-                {etiqueta}
-              </th>
-              <td className="px-3 py-2 wrap-anywhere">{valor}</td>
-            </tr>
+          {orden.posiciones.map((posicion, indice) => (
+            <FilaPosicion key={indice} posicion={posicion} moneda={orden.moneda} />
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+function Excepciones({ orden }: { readonly orden: Orden }) {
+  return (
+    <div className="px-4 py-3 text-sm sm:px-5">
+      <h4 className="text-xs font-semibold text-texto-suave">{TEXTOS_ORDEN.campos.excepciones}</h4>
+      {orden.excepciones.length === 0 ? (
+        <p className="mt-1">{TEXTOS_ORDEN.sinExcepciones}</p>
+      ) : (
+        <ul aria-label={TEXTOS_ORDEN.campos.excepciones} className="mt-1 space-y-1">
+          {orden.excepciones.map((e) => (
+            <li key={e.codigo} className={`rounded-lg px-2 py-1 ${TONOS.aviso}`}>
+              <span className="font-semibold">{e.codigo}</span> ·{" "}
+              <span className="text-texto">{e.detalle}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * La OC como documento, tal como quedaría en SAP (resultado de `oc_construir_payload`):
+ * cabecera con proveedor, aprobador y condiciones; posiciones; total y excepciones.
+ * @param props - datos del payload
+ * @returns el documento
+ */
+export function DocumentoOrden({ datos }: { readonly datos: DatosPayload }) {
+  const { orden } = datos;
+  return (
+    <article aria-label={TEXTOS_ORDEN.titulo} className={`${CLASES.tarjeta} overflow-hidden`}>
+      <header className="border-b border-borde bg-elevada px-4 py-3 sm:px-5">
+        <h3 className="text-base font-semibold">{TEXTOS_ORDEN.titulo}</h3>
+        <p className="text-xs text-texto-suave">
+          {TEXTOS_ORDEN.borrador}
+          {orden.referencia && ` · ${TEXTOS_ORDEN.referencia} ${orden.referencia.solicitud_id}`}
+        </p>
+      </header>
+      <dl className="grid gap-x-6 gap-y-2 px-4 py-3 text-sm sm:grid-cols-2 sm:px-5">
+        {camposCabecera(orden).map(([etiqueta, valor]) => (
+          <div key={etiqueta} className="min-w-0">
+            <dt className="text-xs text-texto-suave">{etiqueta}</dt>
+            <dd className="wrap-anywhere">{valor}</dd>
+          </div>
+        ))}
+      </dl>
+      <TablaPosiciones orden={orden} />
+      <p className="flex items-baseline justify-between gap-3 border-b border-borde px-4 py-3 sm:px-5">
+        <span className="text-sm font-semibold">{TEXTOS_ORDEN.campos.total}</span>
+        <span className="text-xl font-semibold tabular-nums">
+          {formatearMonto(totalOrden(datos), orden.moneda)}
+        </span>
+      </p>
+      <Excepciones orden={orden} />
+    </article>
   );
 }
 
@@ -75,7 +155,7 @@ export function TarjetaOrdenCreada({ datos }: { readonly datos: DatosCreacion })
     ? TEXTOS_ORDEN.existente(datos.numero_oc)
     : TEXTOS_ORDEN.creada(datos.numero_oc);
   return (
-    <div className={`rounded-xl p-3 text-sm ${TONOS.exito}`}>
+    <div className={`rounded-2xl p-4 text-sm ${TONOS.exito}`}>
       <p className="text-base font-semibold">
         <span aria-hidden="true">✅ </span>
         {titulo}
@@ -87,7 +167,7 @@ export function TarjetaOrdenCreada({ datos }: { readonly datos: DatosCreacion })
       {datos.ruta_evidencia && (
         <p className="mt-1 text-texto wrap-anywhere">
           {TEXTOS_ORDEN.evidencia}
-          <code className="font-mono text-xs">{datos.ruta_evidencia}</code>
+          <span className="font-medium">{datos.ruta_evidencia}</span>
         </p>
       )}
     </div>

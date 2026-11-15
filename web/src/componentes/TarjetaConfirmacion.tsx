@@ -1,5 +1,8 @@
+import type { ResumenCaso } from "@contratos/contratos-api";
+
 import type { Hallazgo } from "../estado/resultados";
 import { CLASES } from "./clases";
+import { formatearMonto } from "./formato";
 import { FichaHallazgo } from "./ResultadoValidacion";
 import { TEXTOS_CONFIRMACION } from "./textos";
 
@@ -12,6 +15,8 @@ export interface PropiedadesTarjetaConfirmacion {
   readonly confirmaciones: readonly Hallazgo[];
   /** Caso cuya OC se confirma; sin él, el título es genérico. */
   readonly caso: string | null;
+  /** Resumen del caso en la bandeja, para recordar qué se va a crear. */
+  readonly resumen?: ResumenCaso | undefined;
   /** Deshabilita los botones mientras hay una petición en curso. */
   readonly deshabilitado: boolean;
   readonly alConfirmar: () => void;
@@ -22,14 +27,14 @@ function BotonesConfirmacion({
   deshabilitado,
   alConfirmar,
   alCancelar,
-}: Omit<PropiedadesTarjetaConfirmacion, "confirmaciones" | "caso">) {
+}: Omit<PropiedadesTarjetaConfirmacion, "confirmaciones" | "caso" | "resumen">) {
   return (
-    <div className="mt-4 flex flex-wrap gap-2">
+    <div className="mt-4 flex flex-col gap-2 sm:flex-row">
       <button
         type="button"
         disabled={deshabilitado}
         onClick={alConfirmar}
-        className={CLASES.botonPrimario}
+        className={`${CLASES.botonPrimario} min-h-11`}
       >
         {TEXTOS_CONFIRMACION.confirmar}
       </button>
@@ -37,11 +42,21 @@ function BotonesConfirmacion({
         type="button"
         disabled={deshabilitado}
         onClick={alCancelar}
-        className={CLASES.botonSecundario}
+        className={`${CLASES.botonSecundario} min-h-11`}
       >
         {TEXTOS_CONFIRMACION.cancelar}
       </button>
     </div>
+  );
+}
+
+/** Qué se va a crear: descripción, proveedor y monto del caso. */
+function ResumenConfirmacion({ resumen }: { readonly resumen: ResumenCaso }) {
+  return (
+    <p className="mt-1 text-sm font-medium text-texto">
+      {resumen.descripcion} · {resumen.proveedor} ·{" "}
+      <span className="tabular-nums">{formatearMonto(resumen.valor_total, resumen.moneda)}</span>
+    </p>
   );
 }
 
@@ -55,6 +70,7 @@ function BotonesConfirmacion({
 export function TarjetaConfirmacion({
   confirmaciones,
   caso,
+  resumen,
   deshabilitado,
   alConfirmar,
   alCancelar,
@@ -68,6 +84,7 @@ export function TarjetaConfirmacion({
         <span aria-hidden="true">⚠️ </span>
         {caso === null ? TEXTOS_CONFIRMACION.titulo : TEXTOS_CONFIRMACION.tituloCaso(caso)}
       </h2>
+      {resumen && <ResumenConfirmacion resumen={resumen} />}
       <p className="mt-1 text-sm text-texto">{TEXTOS_CONFIRMACION.ayuda}</p>
       {confirmaciones.length > 0 && (
         <ul className="mt-3 space-y-2">
