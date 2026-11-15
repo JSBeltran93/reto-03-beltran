@@ -38,9 +38,9 @@ export function contexto(directory: string, sessionId = "test"): ContextoHerrami
 }
 
 /**
- * @param json - texto JSON devuelto por una herramienta
+ * @param texto - texto JSON devuelto por una herramienta
  * @returns el valor interpretado
  */
-export function leerJsonTexto(json: string): unknown {
-  return JSON.parse(json);
+export function leerJsonTexto(texto: string): unknown {
+  return JSON.parse(texto);
 }

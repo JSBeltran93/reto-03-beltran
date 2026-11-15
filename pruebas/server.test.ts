@@ -35,6 +35,7 @@ describe("API HTTP", () => {
       reply: "Hola, soy el agente.",
       toolCalls: [],
       needsConfirmation: false,
+      casoPendiente: null,
     });
   });
 
@@ -48,10 +49,10 @@ describe("API HTTP", () => {
   });
 
   it("GET /api/sessions/:id devuelve el historial visible o 404", async () => {
-    const app = construirAplicacion();
-    await request(app).post("/api/chat").send({ sessionId: SESION, message: "hola" });
+    const aplicacion = construirAplicacion();
+    await request(aplicacion).post("/api/chat").send({ sessionId: SESION, message: "hola" });
 
-    const r = await request(app).get(`/api/sessions/${SESION}`);
+    const r = await request(aplicacion).get(`/api/sessions/${SESION}`);
 
     expect(r.body).toEqual({
       id: SESION,
@@ -59,17 +60,19 @@ describe("API HTTP", () => {
         { tipo: "usuario", texto: "hola" },
         { tipo: "asistente", texto: "Hola, soy el agente." },
       ],
+      needsConfirmation: false,
+      casoPendiente: null,
     });
-    expect((await request(app).get(`/api/sessions/${OTRA_SESION}`)).status).toBe(404);
+    expect((await request(aplicacion).get(`/api/sessions/${OTRA_SESION}`)).status).toBe(404);
   });
 
   it("responde 400 y no 500 ante un JSON mal formado, y 413 ante un cuerpo demasiado grande", async () => {
-    const app = construirAplicacion();
-    const malFormado = await request(app)
+    const aplicacion = construirAplicacion();
+    const malFormado = await request(aplicacion)
       .post("/api/chat")
       .set("Content-Type", "application/json")
       .send("{ roto");
-    const grande = await request(app)
+    const grande = await request(aplicacion)
       .post("/api/chat")
       .send({ sessionId: SESION, message: "x".repeat(40_000) });
 

@@ -1,5 +1,5 @@
 import type { Maestros, Paquete } from "../../src/tools/oc/esquemas";
-import { leerMaestros } from "../../src/tools/oc/fixtures";
+import { leerMaestros } from "../../src/tools/oc/insumos";
 import { leerPaquete } from "../../src/tools/oc/paquete";
 import { RAIZ_PROYECTO } from "./proyecto";
 

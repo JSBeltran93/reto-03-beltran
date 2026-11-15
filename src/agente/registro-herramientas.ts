@@ -14,7 +14,7 @@ export type Catalogo = Readonly<Record<string, Herramienta<z.ZodRawShape>>>;
 /** Llamada ejecutada: JSON para el modelo, vista resumida para el chat y datos si tuvo éxito. */
 export interface Ejecucion {
   readonly vista: VistaLlamada;
-  readonly json: string;
+  readonly serializado: string;
   readonly data: unknown;
 }
 
@@ -98,7 +98,7 @@ export function ejecucionFallida(
       ok: false,
       resumen: `${codigo}: ${mensaje}`,
     },
-    json: JSON.stringify(fallo(codigo, mensaje)),
+    serializado: JSON.stringify(fallo(codigo, mensaje)),
     data: undefined,
   };
 }
@@ -125,8 +125,8 @@ export async function ejecutarLlamada(
   const args = z.object(herramienta.args).safeParse(llamada.args);
   if (!args.success)
     return ejecucionFallida(llamada, "ARGS_INVALIDOS", z.prettifyError(args.error));
-  const json = await herramienta.execute(args.data, ctx);
-  const resultado = EsquemaResultadoSerializado.parse(JSON.parse(json));
+  const serializado = await herramienta.execute(args.data, ctx);
+  const resultado = EsquemaResultadoSerializado.parse(JSON.parse(serializado));
   const resumen = resultado.ok
     ? resumir(llamada.nombre, resultado.data)
     : `${resultado.error?.codigo ?? "ERROR"}: ${resultado.error?.mensaje ?? ""}`;
@@ -138,7 +138,7 @@ export async function ejecutarLlamada(
       resumen,
       ...(resultado.ok && { datos: resultado.data }),
     },
-    json,
+    serializado,
     data: resultado.ok ? resultado.data : undefined,
   };
 }

@@ -13,19 +13,19 @@ const SESION = "6f0d3c1e-8a2b-4c5d-9e7f-1a2b3c4d5e6f";
 
 describe("API HTTP: seguridad y límites", () => {
   it("envía Content-Security-Policy y HSTS", async () => {
-    const app = crearAplicacion({
+    const aplicacion = crearAplicacion({
       ciclo: dependenciasCiclo(new LlmFalso([]), crearProyectoTemporal()),
       carpetaEstaticos: "/tmp/no-existe",
     });
 
-    const r = await request(app).get("/api/health");
+    const r = await request(aplicacion).get("/api/health");
 
     expect(r.headers["content-security-policy"]).toContain("default-src 'self'");
     expect(r.headers["strict-transport-security"]).toContain("max-age=");
   });
 
   it("limita los mensajes por IP con 429 y Retry-After", async () => {
-    const app = crearAplicacion({
+    const aplicacion = crearAplicacion({
       ciclo: dependenciasCiclo(
         new LlmFalso([respuestaTexto("uno"), respuestaTexto("dos")]),
         crearProyectoTemporal(),
@@ -34,7 +34,7 @@ describe("API HTTP: seguridad y límites", () => {
       limitador: new LimitadorSolicitudes(1, relojFijo("2026-09-03T15:00:00Z")),
     });
     const enviar = () =>
-      request(app).post("/api/chat").send({ sessionId: SESION, message: "hola" });
+      request(aplicacion).post("/api/chat").send({ sessionId: SESION, message: "hola" });
 
     expect((await enviar()).status).toBe(200);
     const segundo = await enviar();
@@ -48,12 +48,12 @@ describe("API HTTP: seguridad y límites", () => {
       pedirHerramientas({ nombre: "oc_leer_paquete", args: { caso: "sol-001" } }),
       respuestaTexto("listo"),
     ]);
-    const app = crearAplicacion({
+    const aplicacion = crearAplicacion({
       ciclo: dependenciasCiclo(llm, crearProyectoTemporal()),
       carpetaEstaticos: "/tmp/no-existe",
     });
 
-    const r = await request(app)
+    const r = await request(aplicacion)
       .post("/api/chat")
       .send({ sessionId: SESION, message: "lee sol-001" });
 

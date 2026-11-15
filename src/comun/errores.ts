@@ -18,9 +18,7 @@ export const CODIGOS_ERROR = [
   "LLM_NO_DISPONIBLE",
   "LLM_CLAVE_INVALIDA",
   "LLM_SOLICITUD_INVALIDA",
-  "LLM_RESPUESTA_TRUNCADA",
   "LLM_RECHAZO",
-  "PRESUPUESTO_AGOTADO",
 ] as const;
 
 /** Uno de los códigos de error del catálogo. */

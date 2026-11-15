@@ -17,9 +17,7 @@
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
     "prepare": "husky || true"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "license": "UNLICENSED",
   "type": "module",
   "engines": {
     "node": "^22.9"
@@ -37,7 +35,7 @@
     "@commitlint/config-conventional": "^21.2.4",
     "@eslint/js": "^9.39.5",
     "@types/express": "^5.0.6",
-    "@types/node": "^26.6.6",
+    "@types/node": "^22.20.5",
     "@types/supertest": "^7.2.1",
     "@vitest/coverage-v8": "^5.1.0",
     "concurrently": "^10.0.7",

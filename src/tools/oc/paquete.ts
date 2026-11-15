@@ -10,7 +10,7 @@ import {
   type Paquete,
 } from "./esquemas";
 import { extraerCotizacion, extraerFactura } from "./extractores";
-import { leerJson, leerTextoOpcional, resolverCaso } from "./fixtures";
+import { leerJson, leerTextoOpcional, resolverCaso } from "./insumos";
 import { contieneAprobado } from "./normalizar";
 
 /** Nombre original del adjunto → archivo normalizado del fixture (ver `nota_fixture`). */

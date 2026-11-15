@@ -228,12 +228,30 @@ const RC5: Regla = {
   },
 };
 
+/** Confirmación cuando la solicitud informa un código que no existe en su maestro. */
+function codigoDesconocido(regla: IdRegla, campo: string, codigo: string): Hallazgo {
+  return hallazgo(
+    regla,
+    "confirmacion",
+    `El código ${codigo} de ${campo} no existe en el maestro.`,
+    {
+      valores: { [campo]: codigo },
+      accion_sugerida: `Confirmar con el solicitante un código válido de ${campo}.`,
+    },
+  );
+}
+
 const RC6: Regla = {
   id: "RC6",
   tipo: "confirmacion",
   evaluar(ctx) {
+    const informado = ctx.paquete.solicitud.indicador_iva;
+    if (informado !== undefined) {
+      const existe = ctx.maestros.indicadoresIva.some((i) => i.codigo === informado);
+      return existe ? [] : [codigoDesconocido("RC6", "indicador_iva", informado)];
+    }
     const proveedor = proveedorUnico(ctx);
-    if (ctx.paquete.solicitud.indicador_iva !== undefined || proveedor === undefined) return [];
+    if (proveedor === undefined) return [];
     const codigo = proveedor.indicador_iva_default;
     const indicador = ctx.maestros.indicadoresIva.find((i) => i.codigo === codigo);
     return [
@@ -251,8 +269,13 @@ const RC7: Regla = {
   id: "RC7",
   tipo: "derivado",
   evaluar(ctx) {
+    const informado = ctx.paquete.solicitud.condiciones_pago;
+    if (informado !== undefined) {
+      const existe = ctx.maestros.condicionesPago.some((c) => c.codigo === informado);
+      return existe ? [] : [codigoDesconocido("RC7", "condiciones_pago", informado)];
+    }
     const proveedor = proveedorUnico(ctx);
-    if (ctx.paquete.solicitud.condiciones_pago !== undefined || proveedor === undefined) return [];
+    if (proveedor === undefined) return [];
     const codigo = proveedor.condiciones_pago_default;
     const condicion = ctx.maestros.condicionesPago.find((c) => c.codigo === codigo);
     return [

@@ -46,7 +46,7 @@ export class AlmacenSesiones {
       id,
       mensajes: [],
       historial: [],
-      confirmacion: { pendiente: null, otorgada: null },
+      confirmacion: { pendientes: [], otorgada: null },
       tokensUsados: 0,
     };
     this.sesiones.set(id, nueva);

@@ -35,10 +35,11 @@ export function fechaCalendario(iso: string): string {
 const PALABRA_APROBADO = /\baprobado\b/;
 
 /**
- * "no" seguido de hasta tres palabras y "aprobado": "no aprobado", "no está aprobado",
- * "aún no ha sido aprobado".
+ * "no" seguido de hasta tres palabras de la misma frase y "aprobado": "no aprobado",
+ * "no está aprobado", "aún no ha sido aprobado". La puntuación corta la negación, así
+ * "No tengo objeciones. Aprobado." sí es una aprobación.
  */
-const NEGACION_APROBADO = /\bno\s+(?:\S+\s+){0,3}aprobado\b/;
+const NEGACION_APROBADO = /\bno\s+(?:[^\s.,;:!?]+\s+){0,3}aprobado\b/;
 
 /**
  * Detecta una aprobación explícita en el cuerpo de un correo.

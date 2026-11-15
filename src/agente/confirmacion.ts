@@ -8,26 +8,32 @@ const MENSAJE_SIN_CONFIRMACION =
 
 /** Estado de confirmación que se guarda por sesión (CA3). */
 export interface EstadoConfirmacion {
-  /** Caso que espera la confirmación del usuario, si hay. */
-  pendiente: string | null;
+  /** Casos que esperan la confirmación del usuario, en el orden en que quedaron pendientes. */
+  pendientes: string[];
   /** Caso que el usuario confirmó en su último mensaje, si hay. */
   otorgada: string | null;
 }
 
-/** Confirmaciones válidas: solo cuentan al inicio del mensaje. */
+/** Confirmación corta y completa: "Confirmo", "Sí", "Ok", "Sí, confirmo.", "Confirmo la OC". */
 const AFIRMATIVO =
-  /^(si|confirmo|confirmado|apruebo|aprobado|procede|adelante|ok|dale|de acuerdo)\b/;
-/** Rechazos: empiezan con una palabra negativa o niegan la confirmación. */
+  /^(si|confirmo|confirmado|apruebo|procede|adelante|ok|dale|de acuerdo)(,? (si|confirmo|confirmado))?( (la |el )?(oc|orden|creacion))?[\s.!]*$/;
+/** Palabras que anulan una confirmación aunque el mensaje empiece afirmando. */
+const MATIZ = /\b(no|todavia|espera|antes|pero|primero|cancela|cancelar)\b/;
+/** Rechazos explícitos que limpian todos los casos pendientes. */
 const NEGATIVO = /^(no|cancela|cancelar|cancelo|rechazo|detente)\b|\bno confirmo\b|\bcancela/;
 
+function normalizar(mensaje: string): string {
+  return sinTildes(mensaje).toLowerCase().trim();
+}
+
 /**
- * Detecta una confirmación (sin importar tildes ni mayúsculas, sin negación).
+ * Detecta una confirmación corta y completa (sin tildes ni mayúsculas y sin matices).
  * @param mensaje - mensaje del usuario
- * @returns true si el mensaje confirma
+ * @returns true si el mensaje confirma sin condiciones
  */
 export function esAfirmativo(mensaje: string): boolean {
-  const texto = sinTildes(mensaje).toLowerCase().trim();
-  return AFIRMATIVO.test(texto) && !NEGATIVO.test(texto);
+  const texto = normalizar(mensaje);
+  return AFIRMATIVO.test(texto) && !MATIZ.test(texto);
 }
 
 /**
@@ -36,23 +42,32 @@ export function esAfirmativo(mensaje: string): boolean {
  * @returns true si el mensaje cancela
  */
 export function esNegativo(mensaje: string): boolean {
-  return NEGATIVO.test(sinTildes(mensaje).toLowerCase());
+  return NEGATIVO.test(normalizar(mensaje));
 }
 
 /**
- * Aplica un mensaje nuevo del usuario: una confirmación otorga el caso pendiente,
- * un rechazo lo limpia y cualquier mensaje revoca una confirmación anterior
- * (solo vale para el turno inmediatamente posterior a la pregunta).
+ * Caso pendiente más reciente, el que se confirmaría con un "Confirmo".
+ * @param estado - estado de confirmación de la sesión
+ * @returns el caso, o null si no hay pendientes
+ */
+export function casoPendiente(estado: EstadoConfirmacion): string | null {
+  return estado.pendientes.at(-1) ?? null;
+}
+
+/**
+ * Aplica un mensaje nuevo del usuario: una confirmación otorga solo el caso pendiente
+ * más reciente, un rechazo limpia todos los pendientes y cualquier otro mensaje
+ * conserva los pendientes pero revoca una confirmación anterior.
  * @param estado - estado de confirmación de la sesión (se modifica)
  * @param mensaje - mensaje del usuario
  */
 export function alMensajeUsuario(estado: EstadoConfirmacion, mensaje: string): void {
   estado.otorgada = null;
-  if (estado.pendiente === null) return;
+  if (estado.pendientes.length === 0) return;
   if (esAfirmativo(mensaje)) {
-    estado.otorgada = estado.pendiente;
+    estado.otorgada = casoPendiente(estado);
   } else if (esNegativo(mensaje)) {
-    estado.pendiente = null;
+    estado.pendientes = [];
   }
 }
 
@@ -79,8 +94,8 @@ export function autorizar(
 }
 
 /**
- * Actualiza el caso pendiente después de una llamada: un payload construido queda
- * esperando la creación; una OC creada limpia el estado.
+ * Actualiza los pendientes después de una llamada: un payload construido queda
+ * esperando la creación (al final de la lista); una OC creada quita solo su caso.
  * @param estado - estado de confirmación de la sesión (se modifica)
  * @param llamada - llamada ejecutada
  * @param data - datos del resultado exitoso, o undefined si falló
@@ -91,15 +106,12 @@ export function trasHerramienta(
   data: unknown,
 ): void {
   const caso = casoDe(llamada);
-  if (
-    llamada.nombre === NOMBRES_HERRAMIENTAS.construirPayload &&
-    caso !== null &&
-    data !== undefined
-  ) {
-    estado.pendiente = caso;
+  if (caso === null || data === undefined) return;
+  if (llamada.nombre === NOMBRES_HERRAMIENTAS.construirPayload) {
+    estado.pendientes = [...estado.pendientes.filter((c) => c !== caso), caso];
   }
-  if (llamada.nombre === NOMBRES_HERRAMIENTAS.crear && data !== undefined) {
-    estado.pendiente = null;
-    estado.otorgada = null;
+  if (llamada.nombre === NOMBRES_HERRAMIENTAS.crear) {
+    estado.pendientes = estado.pendientes.filter((c) => c !== caso);
+    if (estado.otorgada === caso) estado.otorgada = null;
   }
 }
