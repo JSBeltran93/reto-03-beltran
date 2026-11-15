@@ -1,12 +1,17 @@
 import {
   EsquemaRespuestaChat,
-  EsquemaSalud,
+  EsquemaVistaSesion,
   type RespuestaChat,
-  type Salud,
   type SolicitudChat,
+  type VistaSesion,
 } from "@contratos/contratos-api";
+import { RUTAS_API } from "@contratos/rutas-api";
 
-import { clienteHttp, ErrorApi, MENSAJES_ERROR_API, RUTAS_API } from "./cliente";
+import { clienteHttp, ErrorApi, ESTADOS_HTTP, MENSAJES_ERROR_API } from "./cliente";
+
+function respuestaInvalida(): ErrorApi {
+  return new ErrorApi(MENSAJES_ERROR_API.respuestaInvalida, { reintentable: false });
+}
 
 /**
  * Envía un mensaje al agente.
@@ -17,18 +22,24 @@ import { clienteHttp, ErrorApi, MENSAJES_ERROR_API, RUTAS_API } from "./cliente"
 export async function enviarMensaje(solicitud: SolicitudChat): Promise<RespuestaChat> {
   const { data } = await clienteHttp.post<unknown>(RUTAS_API.chat, solicitud);
   const validada = EsquemaRespuestaChat.safeParse(data);
-  if (!validada.success) throw new ErrorApi(MENSAJES_ERROR_API.respuestaInvalida);
+  if (!validada.success) throw respuestaInvalida();
   return validada.data;
 }
 
 /**
- * Consulta el estado del servidor.
- * @returns proveedor y modelo configurados
- * @throws ErrorApi si el servidor no responde o la respuesta no cumple el contrato
+ * Obtiene el historial que el servidor guarda para una sesión.
+ * @param sessionId - identificador de la sesión
+ * @returns el historial, o null si el servidor no conoce la sesión (404)
+ * @throws ErrorApi si la petición falla o la respuesta no cumple el contrato
  */
-export async function obtenerSalud(): Promise<Salud> {
-  const { data } = await clienteHttp.get<unknown>(RUTAS_API.salud);
-  const validada = EsquemaSalud.safeParse(data);
-  if (!validada.success) throw new ErrorApi(MENSAJES_ERROR_API.respuestaInvalida);
-  return validada.data;
+export async function obtenerSesion(sessionId: string): Promise<VistaSesion | null> {
+  try {
+    const { data } = await clienteHttp.get<unknown>(RUTAS_API.sesion(sessionId));
+    const validada = EsquemaVistaSesion.safeParse(data);
+    if (!validada.success) throw respuestaInvalida();
+    return validada.data;
+  } catch (error) {
+    if (error instanceof ErrorApi && error.estado === ESTADOS_HTTP.noEncontrado) return null;
+    throw error;
+  }
 }
