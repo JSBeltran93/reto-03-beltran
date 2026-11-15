@@ -1,4 +1,5 @@
 import { CLASES, TONOS } from "./clases";
+import { IconoAlerta } from "./Iconos";
 import { TEXTOS_ESTADO } from "./textos";
 import { useCuentaRegresiva } from "./useCuentaRegresiva";
 
@@ -21,11 +22,11 @@ export function AvisoError({ mensaje, alReintentar, esperaSegundos }: Propiedade
   const restantes = useCuentaRegresiva(esperaSegundos);
   return (
     <div
-      className={`flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3 text-sm ${TONOS.peligro}`}
+      className={`flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3.5 text-sm ${TONOS.peligro}`}
     >
-      <p role="alert" className="min-w-0 flex-1 font-medium wrap-anywhere">
-        <span aria-hidden="true">⛔ </span>
-        {mensaje}
+      <p role="alert" className="flex min-w-0 flex-1 gap-2 leading-6 font-medium wrap-anywhere">
+        <IconoAlerta className="mt-1 size-4" />
+        <span className="min-w-0">{mensaje}</span>
       </p>
       {alReintentar && restantes > 0 && (
         <p className="text-xs">{TEXTOS_ESTADO.esperaReintento(restantes)}</p>

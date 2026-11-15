@@ -10,10 +10,13 @@ import {
   type GenerateContentResponse,
   GoogleGenAI,
   type Part,
+  type ThinkingConfig,
+  ThinkingLevel,
 } from "@google/genai";
 
 import type { CodigoError } from "../comun/errores";
 import { exito, fallo, type Resultado } from "../comun/resultado";
+import type { NivelRazonamiento } from "../configuracion";
 import type {
   AdaptadorLlm,
   FinRespuesta,
@@ -24,7 +27,26 @@ import type {
   RespuestaLlm,
 } from "./adapter";
 
-const MAX_TOKENS_RESPUESTA = 16_000;
+/**
+ * Tope de tokens de salida por llamada (incluye el razonamiento). El modelo solo orquesta
+ * herramientas y redacta un resumen corto; un tope menor acota la latencia de una
+ * respuesta desbocada sin recortar las normales.
+ */
+export const MAX_TOKENS_RESPUESTA = 8_192;
+
+/**
+ * Temperatura del muestreo. Google recomienda no bajarla en Gemini 3 (valores bajos
+ * pueden provocar bucles o peor desempeño); se fija explícita para que no dependa del SDK.
+ */
+export const TEMPERATURA = 1;
+
+/** Traducción de `LLM_RAZONAMIENTO` al `thinkingLevel` de Gemini 3. */
+export const NIVEL_GEMINI: Readonly<Record<NivelRazonamiento, ThinkingLevel>> = {
+  minimo: ThinkingLevel.MINIMAL,
+  bajo: ThinkingLevel.LOW,
+  medio: ThinkingLevel.MEDIUM,
+  alto: ThinkingLevel.HIGH,
+};
 
 /**
  * Firma de razonamiento ficticia para turnos del asistente sin partes originales (por
@@ -72,6 +94,8 @@ export interface OpcionesGemini {
   readonly apiKey: string;
   readonly modelo: string;
   readonly timeoutMs: number;
+  /** Nivel de razonamiento; menos razonamiento, menos latencia por iteración. */
+  readonly razonamiento: NivelRazonamiento;
   /** Sustituye la llamada real al SDK (solo pruebas). */
   readonly generar?: GenerarContenido;
 }
@@ -282,10 +306,12 @@ export class AdaptadorGemini implements AdaptadorLlm {
   readonly proveedor = "gemini";
   readonly modelo: string;
   private readonly generar: GenerarContenido | undefined;
+  private readonly razonamiento: ThinkingConfig;
 
-  /** @param opciones - clave, modelo y timeout en milisegundos */
+  /** @param opciones - clave, modelo, nivel de razonamiento y timeout en milisegundos */
   constructor(opciones: OpcionesGemini) {
     this.modelo = opciones.modelo;
+    this.razonamiento = { thinkingLevel: NIVEL_GEMINI[opciones.razonamiento] };
     this.generar = opciones.generar ?? crearGenerador(opciones);
   }
 
@@ -303,6 +329,8 @@ export class AdaptadorGemini implements AdaptadorLlm {
         contents: aContenidosGemini(mensajes),
         config: {
           maxOutputTokens: MAX_TOKENS_RESPUESTA,
+          temperature: TEMPERATURA,
+          thinkingConfig: this.razonamiento,
           ...(sistema && { systemInstruction: sistema.contenido }),
           ...(opciones.senal && { abortSignal: opciones.senal }),
           ...(herramientas.length > 0 && {

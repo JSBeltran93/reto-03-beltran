@@ -1,6 +1,7 @@
 import type { QueryStatus } from "@tanstack/react-query";
 
 import { CLASES, type Tono, TONOS } from "./clases";
+import { IconoMas } from "./Iconos";
 import { TEXTOS_ENCABEZADO } from "./textos";
 
 /** Props de {@link Encabezado}. */
@@ -9,7 +10,7 @@ export interface PropiedadesEncabezado {
   readonly estadoSalud: QueryStatus;
   /** Modelo informado por el servidor cuando la salud es correcta. */
   readonly modelo: string | undefined;
-  /** Deshabilita "Nueva sesión" mientras el agente trabaja. */
+  /** Deshabilita "Nueva conversación" mientras el agente trabaja. */
   readonly deshabilitado: boolean;
   /** Inicia una conversación nueva. */
   readonly alNuevaSesion: () => void;
@@ -54,17 +55,9 @@ function EstadoServidor({
   );
 }
 
-function IconoNuevaSesion() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="size-5">
-      <path d="M10 4a1 1 0 0 1 1 1v4h4a1 1 0 1 1 0 2h-4v4a1 1 0 1 1-2 0v-4H5a1 1 0 1 1 0-2h4V5a1 1 0 0 1 1-1Z" />
-    </svg>
-  );
-}
-
 /**
  * Barra superior: marca del producto, estado del servidor (texto, no solo color) y
- * "Nueva sesión" (ícono con nombre accesible en móvil, botón con texto en escritorio).
+ * "Nueva conversación" (ícono con nombre accesible en móvil, botón con texto en escritorio).
  * @param props - estado de la salud, modelo y acción de nueva sesión
  * @returns el encabezado de la página
  */
@@ -76,16 +69,16 @@ export function Encabezado({
   claveInvalida = false,
 }: PropiedadesEncabezado) {
   return (
-    <header className="sticky top-0 z-10 h-(--alto-encabezado) border-b border-borde bg-superficie">
+    <header className="sticky top-0 z-10 h-(--alto-encabezado) border-b border-borde bg-superficie/90 backdrop-blur supports-[backdrop-filter]:bg-superficie/80">
       <div className="mx-auto flex h-full max-w-7xl items-center gap-3 px-4 lg:px-6">
         <span
           aria-hidden="true"
-          className="grid size-9 shrink-0 place-items-center rounded-xl bg-marca text-sm font-bold text-sobre-marca"
+          className="grid size-9 shrink-0 place-items-center rounded-xl bg-marca text-sm font-bold tracking-tight text-sobre-marca shadow-suave"
         >
           {TEXTOS_ENCABEZADO.sigla}
         </span>
         <div className="min-w-0">
-          <h1 className="truncate text-base leading-tight font-semibold">
+          <h1 className="truncate text-base leading-tight font-semibold tracking-tight">
             {TEXTOS_ENCABEZADO.titulo}
           </h1>
           <p className="hidden truncate text-xs text-texto-suave md:block">
@@ -100,7 +93,7 @@ export function Encabezado({
           aria-label={TEXTOS_ENCABEZADO.nuevaSesion}
           className={`${CLASES.botonIcono} sm:inline-flex sm:w-auto sm:gap-1.5 sm:px-4 sm:text-sm sm:font-medium`}
         >
-          <IconoNuevaSesion />
+          <IconoMas className="size-5" />
           <span className="hidden sm:inline">{TEXTOS_ENCABEZADO.nuevaSesion}</span>
         </button>
       </div>

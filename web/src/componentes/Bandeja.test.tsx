@@ -39,8 +39,8 @@ describe("Bandeja", () => {
   it.each([
     ["sol-001", "Creada"],
     ["sol-002", "Bloqueada"],
-    ["sol-004", "Pendiente"],
-    ["sol-006", "Sin procesar"],
+    ["sol-004", "Esperando tu confirmación"],
+    ["sol-006", "Por revisar"],
   ])("muestra el estado de %s con texto: %s", (caso, estado) => {
     render(<Bandeja {...propiedades()} />);
     const fila = screen.getByRole("button", { name: new RegExp(caso) });
