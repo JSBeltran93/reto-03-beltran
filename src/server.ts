@@ -1,7 +1,7 @@
 /**
  * API HTTP del agente (PRD §6.4) y punto de entrada. `crearAplicacion` arma la aplicacion sin
  * escuchar (se prueba con supertest); al ejecutarse directamente, este archivo
- * compone las dependencias reales (Anthropic, sesiones, prompt) y levanta el servidor.
+ * compone las dependencias reales (Gemini, sesiones, prompt) y levanta el servidor.
  */
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -18,10 +18,8 @@ import { LimitadorSolicitudes } from "./comun/limitador";
 import { registradorJson } from "./comun/registrador";
 import { relojSistema } from "./comun/reloj";
 import { RUTAS_API } from "./comun/rutas-api";
-import { cargarConfiguracion } from "./configuracion";
-import type { AdaptadorLlm } from "./llm/adapter";
-import { AdaptadorAnthropic } from "./llm/anthropic";
-import { AdaptadorConRespaldo } from "./llm/respaldo";
+import { cargarConfiguracion, PROVEEDOR_LLM } from "./configuracion";
+import { crearAdaptadoresLlm } from "./llm/fabrica";
 import { SapSimulado } from "./sap/mock";
 import { crearHerramientasOc } from "./tools/oc";
 
@@ -170,24 +168,6 @@ export function crearAplicacion(dependencias: DependenciasAplicacion): Express {
   return aplicacion;
 }
 
-/**
- * Modelo principal con respaldo: si el principal no está disponible, responde el de respaldo.
- * @param configuracion - configuración validada
- * @returns adaptador LLM compuesto
- */
-function crearLlm(configuracion: ReturnType<typeof cargarConfiguracion>): AdaptadorLlm {
-  const anthropic = (modelo: string): AdaptadorLlm =>
-    new AdaptadorAnthropic({
-      apiKey: configuracion.ANTHROPIC_API_KEY,
-      modelo,
-      timeoutMs: configuracion.LLM_TIMEOUT_MS,
-    });
-  return new AdaptadorConRespaldo(
-    [anthropic(configuracion.LLM_MODELO), anthropic(configuracion.LLM_MODELO_RESPALDO)],
-    registradorJson,
-  );
-}
-
 /** Compone las dependencias reales y levanta el servidor (raíz de composición). */
 function iniciar(): void {
   const configuracion = cargarConfiguracion();
@@ -200,7 +180,7 @@ function iniciar(): void {
     carpetaEstaticos: path.join(raiz, "web", "dist"),
     limitador: new LimitadorSolicitudes(configuracion.MAX_SOLICITUDES_MINUTO, relojSistema),
     ciclo: {
-      llm: crearLlm(configuracion),
+      llm: crearAdaptadoresLlm(configuracion, registradorJson),
       sesiones: new AlmacenSesiones({
         maxSesiones: configuracion.MAX_SESIONES,
         maxTokensDia: configuracion.MAX_TOKENS_DIA,
@@ -220,7 +200,8 @@ function iniciar(): void {
       puerto: configuracion.PORT,
       modelo: configuracion.LLM_MODELO,
       modeloRespaldo: configuracion.LLM_MODELO_RESPALDO,
-      claveConfigurada: configuracion.ANTHROPIC_API_KEY !== "",
+      proveedor: PROVEEDOR_LLM,
+      claveConfigurada: configuracion.GEMINI_API_KEY !== "",
     });
   });
 }
