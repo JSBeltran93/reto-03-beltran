@@ -1,5 +1,5 @@
 /**
- * Catálogo de códigos de error del dominio (documentacion/PLAN.md §7.4).
+ * Catálogo de códigos de error del dominio (SOLUCION.md §3).
  * Los códigos son identificadores estables; el mensaje que los acompaña es para el usuario.
  */
 export const CODIGOS_ERROR = [
