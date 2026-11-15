@@ -129,6 +129,19 @@ export function casoDeLlamada(llamada: VistaLlamada): string | null {
 }
 
 /**
+ * Casos sobre los que el agente llamó herramientas en una conversación.
+ * @param entradas - historial de la conversación
+ * @returns los casos, sin repetir y en orden de aparición
+ */
+export function casosDeHistorial(entradas: readonly EntradaHistorial[]): string[] {
+  const casos = entradas.flatMap((entrada) => {
+    const caso = entrada.tipo === "herramienta" ? casoDeLlamada(entrada.llamada) : null;
+    return caso === null ? [] : [caso];
+  });
+  return [...new Set(casos)];
+}
+
+/**
  * Confirmaciones pendientes según la última validación correcta del caso.
  * @param entradas - historial de la conversación
  * @param caso - caso pendiente de confirmación; null toma la última validación de cualquier caso

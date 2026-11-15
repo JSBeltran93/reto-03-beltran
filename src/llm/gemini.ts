@@ -26,6 +26,15 @@ import type {
 
 const MAX_TOKENS_RESPUESTA = 16_000;
 
+/**
+ * Firma de razonamiento ficticia para turnos del asistente sin partes originales (por
+ * ejemplo, los que respondió un modelo de respaldo). Gemini 3 exige `thoughtSignature` en
+ * la primera llamada a función de cada turno del modelo y responde 400 si falta; la
+ * documentación oficial de "thought signatures" admite este valor para historiales
+ * transferidos de otro modelo o inyectados, que no tienen una firma real.
+ */
+export const FIRMA_RAZONAMIENTO_FICTICIA = "skip_thought_signature_validator";
+
 /** Prefijo de los identificadores de llamada cuando Gemini no envía uno propio. */
 const PREFIJO_ID_LLAMADA = "gemini-llamada-";
 
@@ -87,13 +96,15 @@ function esListaDePartes(bruto: unknown): bruto is Part[] {
 
 /**
  * Partes de un turno del asistente: las originales si existen (conservan las firmas de
- * razonamiento que Gemini exige al continuar con herramientas); si no, texto y llamadas.
+ * razonamiento que Gemini exige al continuar con herramientas); si no, texto y llamadas,
+ * con la firma ficticia en la primera llamada (la única que Gemini valida por turno).
  */
 function partesAsistente(mensaje: MensajeAsistente): Part[] {
   if (esListaDePartes(mensaje.bruto)) return mensaje.bruto;
   const texto: Part[] = mensaje.texto ? [{ text: mensaje.texto }] : [];
-  const llamadas: Part[] = mensaje.llamadas.map((l) => ({
+  const llamadas: Part[] = mensaje.llamadas.map((l, indice) => ({
     functionCall: { id: l.id, name: l.nombre, args: l.args as Record<string, unknown> },
+    ...(indice === 0 && { thoughtSignature: FIRMA_RAZONAMIENTO_FICTICIA }),
   }));
   return [...texto, ...llamadas];
 }

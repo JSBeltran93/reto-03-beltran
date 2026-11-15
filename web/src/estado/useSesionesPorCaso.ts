@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 
 import { mensajeProcesar } from "../componentes/textos";
 import { type Navegacion, useNavegacion } from "./navegacion";
+import { casosDeHistorial } from "./resultados";
 import {
   casoDeSesion,
   leerSesionesPorCaso,
@@ -18,12 +19,15 @@ export interface SesionAbierta {
   readonly vacia: boolean;
   /** Caso cuya OC espera confirmación en esta sesión (null si no hay). */
   readonly casoPendiente: string | null;
+  /** Casos sobre los que el agente ya trabajó en esta sesión. */
+  readonly casos: readonly string[];
 }
 
 /**
  * Elige la sesión de un caso: cada caso tiene su propia conversación (PRD §11: "sesión
  * nueva" por caso). Una sesión abierta que no es de ningún caso se adopta si espera la
- * confirmación de ese caso (no se pierde de vista) o si está vacía.
+ * confirmación de ese caso (no se pierde de vista), si ya trató ese caso (se ve su
+ * historial) o si está vacía.
  * @param caso - caso elegido
  * @param abierta - sesión abierta ahora
  * @param mapa - sesiones recordadas por caso
@@ -38,7 +42,8 @@ export function sesionParaCaso(
   if (libre && abierta.casoPendiente === caso) return abierta.sessionId;
   const recordada = mapa[caso];
   if (recordada !== undefined) return recordada;
-  return libre && abierta.vacia ? abierta.sessionId : nuevoIdSesion();
+  const propia = abierta.vacia || abierta.casos.includes(caso);
+  return libre && propia ? abierta.sessionId : nuevoIdSesion();
 }
 
 /** Navegación con una conversación por caso y las acciones que dependen del caso. */
@@ -71,13 +76,16 @@ export function useSesionesPorCaso(conversacion: Conversacion): SesionesPorCasoA
         sessionId: estado.sessionId,
         vacia: estado.entradas.length === 0,
         casoPendiente: estado.casoPendiente,
+        casos: casosDeHistorial(estado.entradas),
       };
-      const id = sesionParaCaso(caso, abierta, leerSesionesPorCaso());
-      if (id !== estado.sessionId && !abrirSesion(id)) return;
+      const mapa = leerSesionesPorCaso();
+      const id = sesionParaCaso(caso, abierta, mapa);
+      const nueva = !Object.values(mapa).includes(id);
+      if (id !== estado.sessionId && !abrirSesion(id, { nueva })) return;
       recordarSesionDeCaso(caso, id);
       mostrarCaso(caso);
     },
-    [estado.sessionId, estado.entradas.length, estado.casoPendiente, abrirSesion, mostrarCaso],
+    [estado.sessionId, estado.entradas, estado.casoPendiente, abrirSesion, mostrarCaso],
   );
 
   const procesar = useCallback(

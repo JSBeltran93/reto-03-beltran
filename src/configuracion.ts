@@ -6,7 +6,8 @@ export const PROVEEDOR_LLM = "gemini";
 /** Valores por defecto de la configuración (se sobrescriben con variables de entorno). */
 export const VALORES_POR_DEFECTO = {
   modelo: "gemini-3.6-flash",
-  modeloRespaldo: "gemini-3.5-flash-lite",
+  /** Modelos de respaldo en orden, separados por comas (el plan gratuito limita el cupo diario por modelo). */
+  modelosRespaldo: "gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3-flash-preview",
   timeoutMs: 60_000,
   maxIteraciones: 25,
   maxTokensSesion: 200_000,
@@ -23,12 +24,38 @@ const textoOpcional = z.preprocess(
   z.string().min(1).optional(),
 );
 
+/** Separador de la lista de modelos de respaldo en `LLM_MODELO_RESPALDO`. */
+const SEPARADOR_MODELOS = ",";
+
+/**
+ * Convierte una lista separada por comas en nombres de modelo: recorta espacios e ignora vacíos.
+ * @param lista - texto como `"a, b,,c"`
+ * @returns los modelos en el mismo orden
+ */
+export function separarModelos(lista: string): string[] {
+  return lista
+    .split(SEPARADOR_MODELOS)
+    .map((modelo) => modelo.trim())
+    .filter((modelo) => modelo !== "");
+}
+
+/**
+ * Modelos de respaldo de `LLM_MODELO_RESPALDO`; si la lista queda vacía se usan los de por defecto.
+ * @param lista - valor de la variable, si se definió
+ * @returns los modelos de respaldo en orden de preferencia
+ */
+function modelosRespaldo(lista: string | undefined): string[] {
+  const modelos = separarModelos(lista ?? "");
+  return modelos.length > 0 ? modelos : separarModelos(VALORES_POR_DEFECTO.modelosRespaldo);
+}
+
 const enteroPositivo = (porDefecto: number) =>
   z.coerce.number().int().positive().default(porDefecto);
 
 /**
  * Esquema de las variables de entorno; ver `.env.example`. Si no se fijan los modelos,
- * se usan los valores por defecto.
+ * se usan los valores por defecto. `LLM_MODELO_RESPALDO` (lista separada por comas) se
+ * expone como `LLM_MODELOS_RESPALDO`.
  */
 const EsquemaConfiguracion = z
   .object({
@@ -44,10 +71,10 @@ const EsquemaConfiguracion = z
     MAX_SOLICITUDES_MINUTO: enteroPositivo(VALORES_POR_DEFECTO.maxSolicitudesMinuto),
     PORT: enteroPositivo(VALORES_POR_DEFECTO.puerto),
   })
-  .transform((entorno) => ({
+  .transform(({ LLM_MODELO_RESPALDO, ...entorno }) => ({
     ...entorno,
     LLM_MODELO: entorno.LLM_MODELO ?? VALORES_POR_DEFECTO.modelo,
-    LLM_MODELO_RESPALDO: entorno.LLM_MODELO_RESPALDO ?? VALORES_POR_DEFECTO.modeloRespaldo,
+    LLM_MODELOS_RESPALDO: modelosRespaldo(LLM_MODELO_RESPALDO),
   }));
 
 /** Configuración de ejecución, leída solo de variables de entorno. */

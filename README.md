@@ -18,19 +18,19 @@ npm run dev          # back (http://localhost:3000) + front (http://localhost:51
 
 ### Variables de entorno
 
-| Variable                 | Por defecto             | Uso                                                                                                                                |
-| ------------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `GEMINI_API_KEY`         | —                       | Clave de Google Gemini ([AI Studio](https://aistudio.google.com/apikey)); solo en el backend (`.env` local o Variables de Railway) |
-| `LLM_MODELO`             | `gemini-3.6-flash`      | Modelo principal                                                                                                                   |
-| `LLM_MODELO_RESPALDO`    | `gemini-3.5-flash-lite` | Modelo de respaldo ante caída, 429, timeout o rechazo del principal                                                                |
-| `LLM_TIMEOUT_MS`         | `60000`                 | Tiempo máximo por llamada al modelo                                                                                                |
-| `MAX_ITERACIONES`        | `25`                    | Tope de iteraciones herramienta → modelo por turno (CA1)                                                                           |
-| `MAX_SEGUNDOS_TURNO`     | `240`                   | Duración máxima de un turno (el front espera hasta 270 s)                                                                          |
-| `MAX_SOLICITUDES_MINUTO` | `20`                    | Límite de mensajes por minuto e IP (responde 429 con `Retry-After`)                                                                |
-| `MAX_TOKENS_SESION`      | `200000`                | Tope de tokens por sesión                                                                                                          |
-| `MAX_TOKENS_DIA`         | `3000000`               | Tope diario de tokens del servidor                                                                                                 |
-| `MAX_SESIONES`           | `200`                   | Sesiones en memoria (se desaloja la de uso menos reciente)                                                                         |
-| `PORT`                   | `3000`                  | Puerto HTTP (Railway lo asigna)                                                                                                    |
+| Variable                 | Por defecto                                                          | Uso                                                                                                                                |
+| ------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `GEMINI_API_KEY`         | —                                                                    | Clave de Google Gemini ([AI Studio](https://aistudio.google.com/apikey)); solo en el backend (`.env` local o Variables de Railway) |
+| `LLM_MODELO`             | `gemini-3.6-flash`                                                   | Modelo principal                                                                                                                   |
+| `LLM_MODELO_RESPALDO`    | `gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3-flash-preview` | Modelos de respaldo (lista separada por comas, en orden) ante caída, 429, timeout o rechazo del principal                          |
+| `LLM_TIMEOUT_MS`         | `60000`                                                              | Tiempo máximo por llamada al modelo                                                                                                |
+| `MAX_ITERACIONES`        | `25`                                                                 | Tope de iteraciones herramienta → modelo por turno (CA1)                                                                           |
+| `MAX_SEGUNDOS_TURNO`     | `240`                                                                | Duración máxima de un turno (el front espera hasta 270 s)                                                                          |
+| `MAX_SOLICITUDES_MINUTO` | `20`                                                                 | Límite de mensajes por minuto e IP (responde 429 con `Retry-After`)                                                                |
+| `MAX_TOKENS_SESION`      | `200000`                                                             | Tope de tokens por sesión                                                                                                          |
+| `MAX_TOKENS_DIA`         | `3000000`                                                            | Tope diario de tokens del servidor                                                                                                 |
+| `MAX_SESIONES`           | `200`                                                                | Sesiones en memoria (se desaloja la de uso menos reciente)                                                                         |
+| `PORT`                   | `3000`                                                               | Puerto HTTP (Railway lo asigna)                                                                                                    |
 
 `.env.example` es la referencia completa. El único proveedor es Google Gemini; `GET /api/health` muestra el proveedor y el modelo en uso.
 

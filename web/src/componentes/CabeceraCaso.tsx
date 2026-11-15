@@ -1,4 +1,4 @@
-import type { ResumenCaso } from "@contratos/contratos-api";
+import { ESTADOS_CASO, type ResumenCaso } from "@contratos/contratos-api";
 
 import { CLASES } from "./clases";
 import { FichaEstadoCaso } from "./FichaEstadoCaso";
@@ -53,8 +53,34 @@ function DatosCaso({ resumen }: { readonly resumen: ResumenCaso }) {
 }
 
 /**
- * Cabecera del caso abierto: datos de negocio, estado y la acción principal "Procesar",
- * que envía al agente el mensaje del PRD §11. En móvil incluye "← Bandeja".
+ * Botón "Procesar": envía al agente el mensaje del PRD §11 para el caso.
+ * @param props - caso, estado deshabilitado y acción
+ * @returns el botón
+ */
+function BotonProcesar({
+  caso,
+  deshabilitado,
+  alProcesar,
+}: Pick<PropiedadesCabeceraCaso, "deshabilitado" | "alProcesar"> & { readonly caso: string }) {
+  return (
+    <button
+      type="button"
+      disabled={deshabilitado}
+      aria-describedby={ID_AYUDA_PROCESAR}
+      onClick={() => {
+        alProcesar(caso);
+      }}
+      className={`${CLASES.botonPrimario} min-h-11 shrink-0`}
+    >
+      {TEXTOS_BANDEJA.procesar}
+    </button>
+  );
+}
+
+/**
+ * Cabecera del caso abierto: datos de negocio, estado y la acción principal "Procesar".
+ * Un caso con la OC ya creada no ofrece "Procesar" (no hay nada que crear); se puede seguir
+ * preguntando por el chat. En móvil incluye "← Bandeja".
  * @param props - caso, resumen, estado y acciones
  * @returns la cabecera, o solo el botón de volver si no hay caso
  */
@@ -66,6 +92,7 @@ export function CabeceraCaso({
   alVolver,
 }: PropiedadesCabeceraCaso) {
   if (caso === null) return <BotonVolver alVolver={alVolver} />;
+  const procesable = resumen?.estado !== ESTADOS_CASO.creada;
   return (
     <section aria-label={caso} className={`${CLASES.tarjeta} p-4 sm:p-5`}>
       <BotonVolver alVolver={alVolver} />
@@ -80,21 +107,15 @@ export function CabeceraCaso({
           </h2>
           {resumen && <DatosCaso resumen={resumen} />}
         </div>
-        <button
-          type="button"
-          disabled={deshabilitado}
-          aria-describedby={ID_AYUDA_PROCESAR}
-          onClick={() => {
-            alProcesar(caso);
-          }}
-          className={`${CLASES.botonPrimario} min-h-11 shrink-0`}
-        >
-          {TEXTOS_BANDEJA.procesar}
-        </button>
+        {procesable && (
+          <BotonProcesar caso={caso} deshabilitado={deshabilitado} alProcesar={alProcesar} />
+        )}
       </div>
-      <p id={ID_AYUDA_PROCESAR} className="mt-3 text-xs text-texto-suave">
-        {TEXTOS_BANDEJA.ayudaProcesar}
-      </p>
+      {procesable && (
+        <p id={ID_AYUDA_PROCESAR} className="mt-3 text-xs text-texto-suave">
+          {TEXTOS_BANDEJA.ayudaProcesar}
+        </p>
+      )}
     </section>
   );
 }

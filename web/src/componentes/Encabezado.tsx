@@ -76,7 +76,7 @@ export function Encabezado({
   claveInvalida = false,
 }: PropiedadesEncabezado) {
   return (
-    <header className="sticky top-0 z-10 h-(--alto-encabezado) border-b border-borde bg-superficie/90 backdrop-blur">
+    <header className="sticky top-0 z-10 h-(--alto-encabezado) border-b border-borde bg-superficie">
       <div className="mx-auto flex h-full max-w-7xl items-center gap-3 px-4 lg:px-6">
         <span
           aria-hidden="true"

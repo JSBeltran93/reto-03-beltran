@@ -85,4 +85,14 @@ describe("Bandeja", () => {
     rerender(<Bandeja {...propiedades({ casos: [] })} />);
     expect(screen.getByText(TEXTOS_BANDEJA.vacia)).toBeInTheDocument();
   });
+
+  it("si la bandeja no carga, deja ir a la conversación igualmente", async () => {
+    const alAbrirConversacion = vi.fn();
+    render(<Bandeja {...propiedades({ casos: undefined, conError: true, alAbrirConversacion })} />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent(TEXTOS_BANDEJA.error);
+    await userEvent.click(screen.getByRole("button", { name: TEXTOS_BANDEJA.abrirConversacion }));
+
+    expect(alAbrirConversacion).toHaveBeenCalledOnce();
+  });
 });
