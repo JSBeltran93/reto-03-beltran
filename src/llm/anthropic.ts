@@ -54,7 +54,12 @@ function contenidoAsistente(
   return [...texto, ...llamadas];
 }
 
-function aMensajeAnthropic(mensaje: MensajeLlm): Anthropic.MessageParam | null {
+/**
+ * Convierte un mensaje neutral al formato de la API de Anthropic.
+ * @param mensaje - mensaje de la conversación
+ * @returns el mensaje de Anthropic, o null para el system prompt (va aparte)
+ */
+export function aMensajeAnthropic(mensaje: MensajeLlm): Anthropic.MessageParam | null {
   switch (mensaje.rol) {
     case "sistema":
       return null;
@@ -122,8 +127,13 @@ function errorLlm(codigo: CodigoError, mensaje: string, error: unknown): Resulta
 /**
  * Traduce los errores del SDK a códigos del catálogo con un mensaje claro (CA5)
  * y un diagnóstico técnico sin secretos para el registro.
+ * @param error - error lanzado por el SDK
+ * @returns resultado fallido con el código LLM_* correspondiente
  */
-function traducirError(error: unknown): Resultado<never> {
+export function traducirError(error: unknown): Resultado<never> {
+  if (error instanceof Anthropic.APIUserAbortError) {
+    return errorLlm("LLM_TIMEOUT", "El turno superó el tiempo máximo. Intenta de nuevo.", error);
+  }
   if (error instanceof Anthropic.APIConnectionTimeoutError) {
     return errorLlm(
       "LLM_TIMEOUT",
@@ -175,19 +185,22 @@ export class AdaptadorAnthropic implements AdaptadorLlm {
   ): Promise<Resultado<RespuestaLlm>> {
     const sistema = mensajes.find((m) => m.rol === "sistema");
     try {
-      const respuesta = await this.cliente.messages.create({
-        model: this.modelo,
-        max_tokens: MAX_TOKENS_RESPUESTA,
-        output_config: { effort: ESFUERZO_LLM },
-        system: sistema
-          ? [{ type: "text", text: sistema.contenido, cache_control: { type: "ephemeral" } }]
-          : [],
-        messages: mensajes.map(aMensajeAnthropic).filter((m) => m !== null),
-        tools: aHerramientasAnthropic(herramientas),
-        ...(herramientas.length > 0 && {
-          tool_choice: { type: opciones.sinLlamadas ? ("none" as const) : ("auto" as const) },
-        }),
-      });
+      const respuesta = await this.cliente.messages.create(
+        {
+          model: this.modelo,
+          max_tokens: MAX_TOKENS_RESPUESTA,
+          output_config: { effort: ESFUERZO_LLM },
+          system: sistema
+            ? [{ type: "text", text: sistema.contenido, cache_control: { type: "ephemeral" } }]
+            : [],
+          messages: mensajes.map(aMensajeAnthropic).filter((m) => m !== null),
+          tools: aHerramientasAnthropic(herramientas),
+          ...(herramientas.length > 0 && {
+            tool_choice: { type: opciones.sinLlamadas ? ("none" as const) : ("auto" as const) },
+          }),
+        },
+        opciones.senal ? { signal: opciones.senal } : undefined,
+      );
       return exito(aRespuesta(respuesta));
     } catch (error) {
       return traducirError(error);
