@@ -28,10 +28,20 @@ const paquete = EsquemaPaquete.describe(
 const AVISO_PAQUETE_DISTINTO =
   "El paquete recibido difiere de los documentos del caso; se validó con los documentos originales.";
 
-function registrarBloqueo(raiz: string, solicitudId: string, validacion: Validacion): void {
+/**
+ * Registra en el control el resultado de una validación (HU-5): `bloqueada` si no es apta,
+ * `pendiente` si es apta pero espera confirmación; las aptas sin confirmaciones se registran al crear.
+ */
+function registrarValidacion(raiz: string, solicitudId: string, validacion: Validacion): void {
+  const resultado = !validacion.apta
+    ? RESULTADOS_CONTROL.bloqueada
+    : validacion.confirmaciones.length > 0
+      ? RESULTADOS_CONTROL.pendiente
+      : null;
+  if (resultado === null) return;
   registrarControl(raiz, {
     solicitud_id: solicitudId,
-    resultado: RESULTADOS_CONTROL.bloqueada,
+    resultado,
     numero_oc: null,
     retroactiva: validacion.retroactiva,
     bloqueos: validacion.bloqueos.map((h) => h.regla),
@@ -57,8 +67,7 @@ export const validar = definirHerramienta({
     const evaluado = evaluarCaso(ctx.directory, args.caso);
     if (!evaluado.ok) return evaluado;
     const { paquete: fuente, validacion } = evaluado.data;
-    if (!validacion.apta)
-      registrarBloqueo(ctx.directory, fuente.solicitud.solicitud_id, validacion);
+    registrarValidacion(ctx.directory, fuente.solicitud.solicitud_id, validacion);
     const alterado = huella(args.paquete) !== huella(fuente);
     return exito(alterado ? { ...validacion, aviso: AVISO_PAQUETE_DISTINTO } : validacion);
   },

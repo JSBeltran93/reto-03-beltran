@@ -90,4 +90,11 @@ describe("extraerFactura", () => {
       data: { numero: "FC-88231", fecha: "2026-08-10", total: 3_200_000 },
     });
   });
+
+  it.each([".", ",", "COP ."])("rechaza un monto sin dígitos: %j", (texto) => {
+    expect(extraerMonto(`COP ${texto}`)).toMatchObject({
+      ok: false,
+      error: { codigo: "MONTO_INVALIDO" },
+    });
+  });
 });

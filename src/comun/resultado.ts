@@ -10,6 +10,8 @@ export interface ErrorDominio {
   readonly mensaje: string;
   /** Siguiente paso sugerido, si aplica. */
   readonly accion_sugerida?: string;
+  /** Datos técnicos para el registro (estado HTTP, tipo de error); nunca se muestran al usuario ni incluyen secretos. */
+  readonly diagnostico?: Readonly<Record<string, string | number>>;
 }
 
 /** Éxito o fallo de una operación de dominio; las herramientas nunca lanzan (PRD §6.2). */

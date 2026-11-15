@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { construir_payload, crear, leer_paquete } from "../../../src/tools/oc";
@@ -85,5 +88,14 @@ describe("oc_crear", () => {
     );
 
     expect(resultado).toMatchObject({ ok: false, error: { codigo: "ARGS_INVALIDOS" } });
+  });
+
+  it("genera la evidencia si el modelo no la pidió, así ruta_evidencia siempre existe", async () => {
+    const raiz = crearProyectoTemporal();
+    const payload = await payloadDe(raiz, "sol-001");
+
+    const r = (await crearOrden(raiz, "sol-001", payload)) as { data: { ruta_evidencia: string } };
+
+    expect(existsSync(path.join(raiz, r.data.ruta_evidencia))).toBe(true);
   });
 });
