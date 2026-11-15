@@ -1,5 +1,6 @@
 import type { DatosValidacion, Hallazgo } from "../estado/resultados";
 import { CLASES, type Tono, TONOS } from "./clases";
+import { formatearValor } from "./formato";
 import { TEXTOS_VALIDACION } from "./textos";
 
 /** Ícono, tono y nombre accesible de cada tipo de hallazgo (no depende solo del color). */
@@ -10,7 +11,25 @@ const PRESENTACION_HALLAZGO: Readonly<Record<Hallazgo["tipo"], { icono: string; 
 };
 
 /**
- * Ficha de un hallazgo: regla, tipo (texto accesible), detalle y acción sugerida.
+ * Valores con los que se evaluó la regla (montos, topes, fechas…), con números formateados.
+ * @param props - valores del hallazgo
+ * @returns la lista de valores
+ */
+function ValoresHallazgo({ valores }: { readonly valores: NonNullable<Hallazgo["valores"]> }) {
+  return (
+    <dl aria-label={TEXTOS_VALIDACION.valores} className="mt-1 grid grid-cols-[auto_1fr] gap-x-3">
+      {Object.entries(valores).map(([clave, valor]) => (
+        <div key={clave} className="contents">
+          <dt className="text-texto-suave">{clave}</dt>
+          <dd className="text-texto wrap-anywhere">{formatearValor(valor)}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/**
+ * Ficha de un hallazgo: regla, tipo (texto accesible), detalle, valores y acción sugerida.
  * @param props - el hallazgo
  * @returns la ficha
  */
@@ -23,6 +42,9 @@ export function FichaHallazgo({ hallazgo }: { readonly hallazgo: Hallazgo }) {
         {hallazgo.regla} · {TEXTOS_VALIDACION.tipos[hallazgo.tipo]}
       </p>
       <p className="mt-0.5 text-texto">{hallazgo.detalle}</p>
+      {hallazgo.valores && Object.keys(hallazgo.valores).length > 0 && (
+        <ValoresHallazgo valores={hallazgo.valores} />
+      )}
       {hallazgo.accion_sugerida && (
         <p className="mt-1 text-texto-suave">
           {TEXTOS_VALIDACION.accion}

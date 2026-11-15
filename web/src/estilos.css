@@ -14,7 +14,7 @@
   --superficie: #ffffff;
   --elevada: #f1f5f9;
   --borde: #e2e8f0;
-  --borde-fuerte: #cbd5e1;
+  --borde-fuerte: #64748b; /* 4.76:1 sobre superficie: borde de controles ≥ 3:1 (WCAG 1.4.11) */
   --texto: #0f172a;
   --texto-suave: #475569;
   --marca: #2563eb;
@@ -42,7 +42,7 @@
     --superficie: #0f172a;
     --elevada: #1e293b;
     --borde: #1e293b;
-    --borde-fuerte: #334155;
+    --borde-fuerte: #64748b; /* 3.75:1 sobre superficie oscura */
     --texto: #f1f5f9;
     --texto-suave: #94a3b8;
     --marca: #2563eb;

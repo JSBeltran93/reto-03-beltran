@@ -3,7 +3,7 @@ import type { Hallazgo } from "../estado/resultados";
 import { AvisoError } from "./AvisoError";
 import { IndicadorPensando } from "./IndicadorPensando";
 import { TarjetaConfirmacion } from "./TarjetaConfirmacion";
-import { RESPUESTAS_CONFIRMACION } from "./textos";
+import { RESPUESTAS_CONFIRMACION, TEXTOS_ESTADO } from "./textos";
 
 /** Props de {@link AvisosConversacion}. */
 export interface PropiedadesAvisosConversacion {
@@ -12,6 +12,8 @@ export interface PropiedadesAvisosConversacion {
   readonly mostrarConfirmacion: boolean;
   /** Confirmaciones pendientes que se listan en la tarjeta. */
   readonly confirmaciones: readonly Hallazgo[];
+  /** Caso cuya OC se confirma (null si el servidor no lo informó). */
+  readonly caso: string | null;
   readonly alReintentar: () => void;
   readonly alEnviar: (texto: string) => void;
 }
@@ -26,6 +28,7 @@ export function AvisosConversacion({
   error,
   mostrarConfirmacion,
   confirmaciones,
+  caso,
   alReintentar,
   alEnviar,
 }: PropiedadesAvisosConversacion) {
@@ -33,11 +36,16 @@ export function AvisosConversacion({
     <>
       <IndicadorPensando activo={cargando} />
       {error && (
-        <AvisoError mensaje={error.mensaje} {...(error.reintentable && { alReintentar })} />
+        <AvisoError
+          mensaje={error.enHistorial === true ? TEXTOS_ESTADO.errorEnHistorial : error.mensaje}
+          {...(error.reintentable && { alReintentar })}
+          {...(error.esperaSegundos !== undefined && { esperaSegundos: error.esperaSegundos })}
+        />
       )}
       {mostrarConfirmacion && (
         <TarjetaConfirmacion
           confirmaciones={confirmaciones}
+          caso={caso}
           deshabilitado={cargando}
           alConfirmar={() => {
             alEnviar(RESPUESTAS_CONFIRMACION.confirmar);
