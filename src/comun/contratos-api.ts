@@ -18,6 +18,8 @@ export const EsquemaVistaLlamada = z.object({
   args: z.unknown(),
   ok: z.boolean(),
   resumen: z.string(),
+  /** Resultado completo de la herramienta si tuvo éxito (para mostrarlo con detalle en el front). */
+  datos: z.unknown().optional(),
 });
 /** Llamada a herramienta mostrada en el chat. */
 export type VistaLlamada = z.infer<typeof EsquemaVistaLlamada>;
