@@ -24,10 +24,14 @@ describe("bonus modulo/ (PRD §9.4)", () => {
     );
   });
 
-  it("tools/oc.ts expone las mismas herramientas, no copias", () => {
-    expect(herramientasModulo.crear).toBe(herramientasAplicacion.crear);
-    expect(Object.keys(herramientasModulo).sort()).toEqual(
-      Object.keys(herramientasAplicacion).sort(),
-    );
+  it("tools/oc.ts expone exactamente las cinco herramientas del PRD, sin copias", () => {
+    const nombres = ["construir_payload", "crear", "generar_evidencia", "leer_paquete", "validar"];
+
+    expect(Object.keys(herramientasModulo).sort()).toEqual(nombres);
+    for (const nombre of nombres) {
+      expect(herramientasModulo[nombre as keyof typeof herramientasModulo]).toBe(
+        herramientasAplicacion[nombre as keyof typeof herramientasAplicacion],
+      );
+    }
   });
 });
