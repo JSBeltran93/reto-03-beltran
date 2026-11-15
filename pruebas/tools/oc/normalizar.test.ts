@@ -34,3 +34,13 @@ describe("fechaCalendario", () => {
     expect(fechaCalendario("2026-08-26T18:45:00-05:00")).toBe("2026-08-26");
   });
 });
+
+describe("contieneAprobado con negaciones a distancia", () => {
+  it.each([
+    ["No está aprobado todavía", false],
+    ["Aún no ha sido aprobado por gerencia", false],
+    ["Aprobado. No olvides adjuntar la factura", true],
+  ])("evalúa %j", (texto, esperado) => {
+    expect(contieneAprobado(texto)).toBe(esperado);
+  });
+});

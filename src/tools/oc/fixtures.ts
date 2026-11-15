@@ -15,6 +15,9 @@ import {
 const RAIZ_FIXTURES = ["fixtures", "reto-03"] as const;
 const PATRON_CASO = /^[a-z0-9-]+$/;
 
+/** Campos de la solicitud cuyo error de validación se informa como monto inválido. */
+const CAMPOS_MONTO = /cantidad|valor/;
+
 /**
  * Carpeta con los casos de solicitudes de compra.
  * @param raiz - raíz del proyecto
@@ -90,7 +93,7 @@ export function leerJson<T>(archivo: string, esquema: z.ZodType<T>): Resultado<T
   const validado = esquema.safeParse(crudo);
   if (validado.success) return exito(validado.data);
   const campos = validado.error.issues.map((problema) => problema.path.join(".")).join(", ");
-  const esMonto = /cantidad|valor/.test(campos);
+  const esMonto = CAMPOS_MONTO.test(campos);
   return fallo(
     esMonto ? "MONTO_INVALIDO" : "JSON_INVALIDO",
     `El archivo ${nombre} tiene campos inválidos: ${campos}.`,

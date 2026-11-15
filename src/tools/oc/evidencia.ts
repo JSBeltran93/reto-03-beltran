@@ -1,13 +1,12 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { PDFDocument, StandardFonts } from "pdf-lib";
-
 import { sha256 } from "../../comun/huella";
 import { exito, fallo, type Resultado } from "../../comun/resultado";
 import { ARCHIVOS_CASO, ARCHIVOS_SALIDA, rutaSalida, rutaSalidaRelativa } from "../../comun/rutas";
 import { type AprobacionArchivo, EsquemaAprobacionArchivo } from "./esquemas";
 import { leerJson, resolverCaso } from "./fixtures";
+import { escribirPdf } from "./pdf";
 
 /** Salida de `oc_generar_evidencia`: `ruta` y `sha256` del PRD más la ruta del PDF. */
 export interface Evidencia {
@@ -64,17 +63,6 @@ export function leerAprobacionCaso(raiz: string, caso: string): Resultado<Aproba
 export function hashEvidenciaCaso(raiz: string, caso: string): Resultado<string> {
   const aprobacion = leerAprobacionCaso(raiz, caso);
   return aprobacion.ok ? exito(sha256(textoEvidencia(aprobacion.data))) : aprobacion;
-}
-
-async function escribirPdf(archivo: string, contenido: string): Promise<void> {
-  const pdf = await PDFDocument.create();
-  const fuente = await pdf.embedFont(StandardFonts.Helvetica);
-  const pagina = pdf.addPage();
-  const { height } = pagina.getSize();
-  contenido.split("\n").forEach((linea, i) => {
-    pagina.drawText(linea, { x: 50, y: height - 60 - i * 16, size: 10, font: fuente });
-  });
-  writeFileSync(archivo, await pdf.save());
 }
 
 /**

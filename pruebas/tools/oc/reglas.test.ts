@@ -91,3 +91,16 @@ describe("reglas de control", () => {
     });
   });
 });
+
+describe("RC5 con monedas distintas", () => {
+  it("pide confirmación cuando la cotización y la solicitud están en monedas distintas", () => {
+    const base = paqueteDe("sol-001");
+    const cotizacion = base.cotizacion && { ...base.cotizacion, moneda: "USD" };
+    const v = validarPaquete({ ...base, cotizacion }, maestrosReales());
+
+    expect(v.confirmaciones[0]).toMatchObject({
+      regla: "RC5",
+      valores: { moneda_solicitud: "COP", moneda_cotizacion: "USD" },
+    });
+  });
+});
