@@ -4,7 +4,7 @@ Reglas para cualquier sesión de Claude Code que trabaje en este repositorio.
 
 ## Fuentes de verdad
 
-1. `documentacion/PRD.md` (manda ante cualquier duda). 2. `documentacion/PLAN.md`. 3. Este archivo.
+1. El PRD del reto (se entrega aparte; manda ante cualquier duda). 2. `SOLUCION.md` y las decisiones de `documentacion/decisiones/`. 3. Este archivo.
    Si algo contradice el PRD, se sigue el PRD y se anota en `SOLUCION.md` §9 (Supuestos).
 
 ## Comandos
@@ -84,7 +84,7 @@ Nunca se commitean `.env`, `out/`, `node_modules/`, `web/dist/`, `coverage/`.
 
 ## Uso de IA
 
-Anotar en `documentacion/uso-ia.md`: tarea, qué se aceptó, qué se descartó y por qué (`SOLUCION.md` §11).
+Anotar en `SOLUCION.md` §11: tarea, qué se aceptó, qué se descartó y por qué.
 
 ## Si el tiempo aprieta
 
