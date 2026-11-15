@@ -2,7 +2,12 @@ import type { EntradaHistorial } from "@contratos/contratos-api";
 import { describe, expect, it } from "vitest";
 
 import { agruparEnBloques } from "./bloques";
-import { casoDeLlamada, confirmacionesPendientes, resultadoRico } from "./resultados";
+import {
+  casoDeLlamada,
+  casosDeHistorial,
+  confirmacionesPendientes,
+  resultadoRico,
+} from "./resultados";
 
 const hallazgo = { regla: "RC6", tipo: "confirmacion", detalle: "IVA derivado C1" };
 const validar = (datos: unknown, caso = "sol-004", ok = true): EntradaHistorial => ({
@@ -79,6 +84,19 @@ describe("casoDeLlamada", () => {
     [null, null],
   ])("%j → %s", (args, esperado) => {
     expect(casoDeLlamada({ nombre: "oc_validar", args, ok: true, resumen: "" })).toBe(esperado);
+  });
+});
+
+describe("casosDeHistorial", () => {
+  it("lista sin repetir los casos de las llamadas a herramientas", () => {
+    const historial: EntradaHistorial[] = [
+      { tipo: "usuario", texto: "procesa sol-004" },
+      validar(undefined, "sol-004"),
+      validar(undefined, "sol-004"),
+      validar(undefined, "sol-999", false),
+    ];
+
+    expect(casosDeHistorial(historial)).toEqual(["sol-004", "sol-999"]);
   });
 });
 

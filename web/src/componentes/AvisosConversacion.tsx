@@ -5,7 +5,7 @@ import type { Hallazgo } from "../estado/resultados";
 import { AvisoError } from "./AvisoError";
 import { IndicadorPensando } from "./IndicadorPensando";
 import { TarjetaConfirmacion } from "./TarjetaConfirmacion";
-import { RESPUESTAS_CONFIRMACION, TEXTOS_ESTADO } from "./textos";
+import { RESPUESTAS_CONFIRMACION } from "./textos";
 
 /** Props de {@link AvisosConversacion}. */
 export interface PropiedadesAvisosConversacion {
@@ -23,7 +23,9 @@ export interface PropiedadesAvisosConversacion {
 }
 
 /**
- * Zona bajo el historial: estado "pensando", error con reintento y tarjeta de confirmación.
+ * Zona bajo el historial: estado "pensando", error de comunicación y tarjeta de
+ * confirmación. Si hay una confirmación pendiente, la tarjeta manda: sus botones reenvían
+ * la decisión, así que el error no ofrece además "Reintentar".
  * @param props - estado de la conversación y acciones
  * @returns los avisos
  */
@@ -42,8 +44,8 @@ export function AvisosConversacion({
       <IndicadorPensando activo={cargando} />
       {error && (
         <AvisoError
-          mensaje={error.enHistorial === true ? TEXTOS_ESTADO.errorEnHistorial : error.mensaje}
-          {...(error.reintentable && { alReintentar })}
+          mensaje={error.mensaje}
+          {...(error.reintentable && !mostrarConfirmacion && { alReintentar })}
           {...(error.esperaSegundos !== undefined && { esperaSegundos: error.esperaSegundos })}
         />
       )}

@@ -42,6 +42,7 @@ const resumenSol001 = {
   numero_oc: "4500000001",
 } as const;
 
+const SESION_GUARDADA = "33333333-3333-4333-8333-333333333333";
 const PREGUNTA = "La cotización difiere 6 %. ¿Confirmas?";
 const respuestaSol004: RespuestaChat = {
   reply: PREGUNTA,
@@ -98,6 +99,7 @@ describe("Aplicacion", () => {
   });
 
   it("rehidrata el historial guardado en el servidor al cargar", async () => {
+    localStorage.setItem(CLAVE_SESION, SESION_GUARDADA);
     vi.mocked(obtenerSesion).mockResolvedValue({
       id: "x",
       historial: [
@@ -118,6 +120,7 @@ describe("Aplicacion", () => {
   });
 
   it("no muestra la confirmación al rehidratar si el servidor dice que no hay", async () => {
+    localStorage.setItem(CLAVE_SESION, SESION_GUARDADA);
     vi.mocked(obtenerSesion).mockResolvedValue({
       id: "x",
       historial: [
@@ -133,25 +136,30 @@ describe("Aplicacion", () => {
     expect(screen.queryByRole("button", { name: "Confirmar y crear OC" })).not.toBeInTheDocument();
   });
 
-  it("muestra los errores del sistema como aviso con reintento", async () => {
-    vi.mocked(enviarMensaje).mockResolvedValue({
-      reply: "El modelo no está disponible en este momento.",
-      toolCalls: [],
-      needsConfirmation: false,
-      esError: true,
-    });
+  it("muestra el error del sistema una sola vez, en el historial y con reintento", async () => {
+    const reply = "El modelo no está disponible en este momento.";
+    vi.mocked(enviarMensaje)
+      .mockResolvedValueOnce({ reply, toolCalls: [], needsConfirmation: false, esError: true })
+      .mockResolvedValueOnce(respuestaSol004);
     renderizarConConsultas(<Aplicacion />);
 
     await escribir("hola");
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(TEXTOS_ESTADO.errorEnHistorial);
-    expect(screen.getByText("El modelo no está disponible en este momento.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Reintentar" })).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(reply);
+    expect(screen.getAllByText(reply)).toHaveLength(1);
+    await userEvent.click(screen.getByRole("button", { name: TEXTOS_ESTADO.reintentar }));
+
+    expect(await screen.findByText(PREGUNTA)).toBeInTheDocument();
+    expect(vi.mocked(enviarMensaje).mock.calls[1]?.[0].message).toBe("hola");
+    expect(
+      screen.queryByRole("button", { name: TEXTOS_ESTADO.reintentar }),
+    ).not.toBeInTheDocument();
   });
 
-  it("mantiene la confirmación pendiente junto al aviso de error", async () => {
+  it("con confirmación pendiente manda la tarjeta: el error no ofrece reintento", async () => {
+    const reply = "El modelo no está disponible en este momento.";
     vi.mocked(enviarMensaje).mockResolvedValue({
-      reply: "El modelo no está disponible en este momento.",
+      reply,
       toolCalls: [],
       needsConfirmation: true,
       casoPendiente: "sol-004",
@@ -161,8 +169,83 @@ describe("Aplicacion", () => {
 
     await escribir("¿y el IVA?");
 
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Confirmar y crear OC" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Confirmar y crear OC" })).toBeInTheDocument();
+    expect(screen.getAllByText(reply)).toHaveLength(1);
+    expect(
+      screen.queryByRole("button", { name: TEXTOS_ESTADO.reintentar }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("al recargar con el último turno en error ofrece reintentar el último mensaje", async () => {
+    localStorage.setItem(CLAVE_SESION, SESION_GUARDADA);
+    vi.mocked(obtenerSesion).mockResolvedValue({
+      id: SESION_GUARDADA,
+      historial: [
+        { tipo: "usuario", texto: "procesa sol-004" },
+        { tipo: "error", texto: "El modelo rechazó la solicitud." },
+      ],
+      needsConfirmation: false,
+      casoPendiente: null,
+    });
+    vi.mocked(enviarMensaje).mockResolvedValue(respuestaSol004);
+    renderizarConConsultas(<Aplicacion />);
+
+    await userEvent.click(await screen.findByRole("button", { name: TEXTOS_ESTADO.reintentar }));
+
+    await waitFor(() => {
+      expect(vi.mocked(enviarMensaje).mock.calls[0]?.[0]).toEqual({
+        sessionId: SESION_GUARDADA,
+        message: "procesa sol-004",
+      });
+    });
+  });
+
+  it("no pide al servidor el historial de una sesión recién creada", async () => {
+    renderizarConConsultas(<Aplicacion />);
+
+    expect(await screen.findByText(TEXTOS_ENCABEZADO.enLinea)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: TEXTOS_ENCABEZADO.nuevaSesion }));
+
+    expect(obtenerSesion).not.toHaveBeenCalled();
+  });
+
+  it("si la bandeja no carga, se puede ir a la conversación", async () => {
+    vi.mocked(obtenerCasos).mockRejectedValue(new Error("caída"));
+    renderizarConConsultas(<Aplicacion />);
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: TEXTOS_BANDEJA.abrirConversacion }),
+    );
+
+    expect(screen.getByRole("main")).not.toHaveClass("hidden");
+    expect(screen.getByRole("complementary")).toHaveClass("hidden");
+  });
+
+  it("al abrir un caso que la sesión abierta ya trató se ve su historial y una OC creada no ofrece «Procesar»", async () => {
+    localStorage.setItem(CLAVE_SESION, SESION_GUARDADA);
+    vi.mocked(obtenerSesion).mockResolvedValue({
+      id: SESION_GUARDADA,
+      historial: [
+        { tipo: "usuario", texto: "procesa sol-001" },
+        {
+          tipo: "herramienta",
+          llamada: { nombre: "oc_crear", args: { caso: "sol-001" }, ok: true, resumen: "OC" },
+        },
+        { tipo: "asistente", texto: "OC creada." },
+      ],
+      needsConfirmation: false,
+      casoPendiente: null,
+    });
+    renderizarConConsultas(<Aplicacion />);
+    expect(await screen.findByText("OC creada.")).toBeInTheDocument();
+
+    await userEvent.click(await screen.findByRole("button", { name: /Portátiles/ }));
+
+    expect(screen.getByText("OC creada.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: TEXTOS_BANDEJA.procesar })).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(CLAVE_SESIONES_POR_CASO) ?? "{}")).toEqual({
+      "sol-001": SESION_GUARDADA,
+    });
   });
 
   it("avisa en el encabezado si la clave del modelo es inválida", async () => {
@@ -195,17 +278,15 @@ describe("Aplicacion", () => {
 
   it("recupera la respuesta del servidor si la petición se cortó", async () => {
     vi.mocked(enviarMensaje).mockRejectedValue(sinConexion());
-    vi.mocked(obtenerSesion)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-        id: "x",
-        historial: [
-          { tipo: "usuario", texto: "hola" },
-          { tipo: "asistente", texto: "Hola, ¿qué solicitud procesamos?" },
-        ],
-        needsConfirmation: false,
-        casoPendiente: null,
-      });
+    vi.mocked(obtenerSesion).mockResolvedValueOnce({
+      id: "x",
+      historial: [
+        { tipo: "usuario", texto: "hola" },
+        { tipo: "asistente", texto: "Hola, ¿qué solicitud procesamos?" },
+      ],
+      needsConfirmation: false,
+      casoPendiente: null,
+    });
     renderizarConConsultas(<Aplicacion />);
 
     await escribir("hola");
@@ -269,6 +350,10 @@ describe("Aplicacion", () => {
     vi.mocked(enviarMensaje)
       .mockResolvedValueOnce(respuestaSol004)
       .mockResolvedValueOnce(respuestaSol001);
+    vi.mocked(obtenerCasos).mockResolvedValue([
+      { ...resumenSol001, estado: "bloqueada", numero_oc: null },
+      resumenSol004,
+    ]);
     renderizarConConsultas(<Aplicacion />);
     const procesarCaso = async (fila: RegExp): Promise<void> => {
       await userEvent.click(await screen.findByRole("button", { name: fila }));
@@ -308,7 +393,7 @@ describe("Aplicacion", () => {
   });
 
   it("al recargar vuelve a seleccionar el caso de la sesión restaurada", async () => {
-    const sesion = "11111111-1111-4111-8111-111111111111";
+    const sesion = SESION_GUARDADA;
     localStorage.setItem(CLAVE_SESION, sesion);
     localStorage.setItem(CLAVE_SESIONES_POR_CASO, JSON.stringify({ "sol-001": sesion }));
     renderizarConConsultas(<Aplicacion />);

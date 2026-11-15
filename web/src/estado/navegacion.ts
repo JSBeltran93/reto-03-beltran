@@ -35,6 +35,8 @@ export interface Navegacion {
   readonly seleccionar: (caso: string) => void;
   /** En móvil, vuelve a la bandeja (conserva la selección). */
   readonly volver: () => void;
+  /** En móvil, abre la conversación sin cambiar la selección (p. ej. si la bandeja no carga). */
+  readonly abrirConversacion: () => void;
 }
 
 /**
@@ -52,5 +54,8 @@ export function useNavegacion(inicial: string | null = null): Navegacion {
   const volver = useCallback(() => {
     setPanel(PANELES.bandeja);
   }, []);
-  return { seleccionado, panel, seleccionar, volver };
+  const abrirConversacion = useCallback(() => {
+    setPanel(PANELES.conversacion);
+  }, []);
+  return { seleccionado, panel, seleccionar, volver, abrirConversacion };
 }

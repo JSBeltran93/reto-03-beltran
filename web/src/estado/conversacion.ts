@@ -13,14 +13,16 @@ export interface ErrorVisible {
   readonly reintentable: boolean;
   /** Segundos a esperar antes de poder reintentar (límite de solicitudes, 429). */
   readonly esperaSegundos?: number;
-  /** true si el error ya quedó en el historial (respuesta del agente marcada como error). */
-  readonly enHistorial?: boolean;
 }
 
 /** Estado de la conversación en la interfaz. */
 export interface EstadoConversacion {
   readonly sessionId: string;
   readonly entradas: readonly EntradaHistorial[];
+  /**
+   * Error de comunicación con el servidor (no llegó respuesta). Las respuestas del agente
+   * marcadas como error no van aquí: quedan en el historial como entrada `error`.
+   */
   readonly error: ErrorVisible | null;
   readonly esperaConfirmacion: boolean;
   /** Caso cuya OC espera confirmación, según el servidor (null si no se sabe o no hay). */
@@ -68,11 +70,30 @@ function conRespuesta(estado: EstadoConversacion, respuesta: RespuestaChat): Est
   return {
     ...estado,
     entradas: [...estado.entradas, ...herramientas, cierre],
-    error: esError ? { mensaje: respuesta.reply, reintentable: true, enHistorial: true } : null,
+    error: null,
     esperaConfirmacion: respuesta.needsConfirmation,
     casoPendiente: respuesta.casoPendiente ?? null,
     claveInvalida: esError && respuesta.reply === MENSAJE_CLAVE_INVALIDA,
   };
+}
+
+/**
+ * Último mensaje del usuario en un historial (el que se reenvía al reintentar).
+ * @param entradas - historial
+ * @returns el texto, o null si el usuario no escribió nada
+ */
+export function ultimoMensajeUsuario(entradas: readonly EntradaHistorial[]): string | null {
+  const ultimo = entradas.findLast((entrada) => entrada.tipo === "usuario");
+  return ultimo?.tipo === "usuario" ? ultimo.texto : null;
+}
+
+/**
+ * Indica si el último turno del agente terminó en error (última entrada del historial).
+ * @param entradas - historial
+ * @returns true si la última entrada es un error
+ */
+export function terminoEnError(entradas: readonly EntradaHistorial[]): boolean {
+  return entradas.at(-1)?.tipo === "error";
 }
 
 function conSesion(estado: EstadoConversacion, sesion: VistaSesion): EstadoConversacion {
@@ -82,6 +103,7 @@ function conSesion(estado: EstadoConversacion, sesion: VistaSesion): EstadoConve
     error: null,
     esperaConfirmacion: sesion.needsConfirmation,
     casoPendiente: sesion.casoPendiente,
+    ultimoMensaje: ultimoMensajeUsuario(sesion.historial),
   };
 }
 

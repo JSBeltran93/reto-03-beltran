@@ -1,5 +1,5 @@
 import type { VistaSesion } from "@contratos/contratos-api";
-import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import { type QueryClient, useQuery, type UseQueryResult } from "@tanstack/react-query";
 
 import { obtenerSesion } from "../api/chat";
 
@@ -10,6 +10,16 @@ import { obtenerSesion } from "../api/chat";
  */
 export function claveSesion(sessionId: string): readonly ["sesion", string] {
   return ["sesion", sessionId] as const;
+}
+
+/**
+ * Deja en caché una sesión recién creada en el cliente como "sin historial": el servidor
+ * aún no la conoce, así que no se pide (evita un 404 esperado en cada sesión nueva).
+ * @param clienteConsultas - cliente de TanStack Query
+ * @param sessionId - identificador de la sesión nueva
+ */
+export function marcarSesionNueva(clienteConsultas: QueryClient, sessionId: string): void {
+  clienteConsultas.setQueryData<VistaSesion | null>(claveSesion(sessionId), null);
 }
 
 /**
