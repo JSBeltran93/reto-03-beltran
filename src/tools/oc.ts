@@ -6,15 +6,15 @@
  */
 import { z } from "zod";
 
-import { huella } from "../comun/huella";
 import { type Reloj, relojSistema } from "../comun/reloj";
 import { exito } from "../comun/resultado";
 import type { SapAdapter } from "../sap/adapter";
 import { SapSimulado } from "../sap/mock";
-import { evaluarCaso } from "./oc/caso";
+import { avisoPaqueteRecibido, evaluarCaso } from "./oc/caso";
 import { crearOrdenCaso } from "./oc/crear-orden";
-import { EsquemaOrdenCompra, EsquemaPaquete } from "./oc/esquemas";
+import { EsquemaOrdenCompra, EsquemaPaqueteRecibido } from "./oc/esquemas";
 import { generarEvidencia, huellaEvidenciaCaso } from "./oc/evidencia";
+import { leerExcel } from "./oc/excel";
 import { definirHerramienta } from "./oc/herramienta";
 import { leerPaquete } from "./oc/paquete";
 import { construirOrden, guardarTrazabilidad } from "./oc/payload";
@@ -37,12 +37,17 @@ const DEPENDENCIAS_POR_DEFECTO: DependenciasHerramientasOc = {
 const caso = z
   .string()
   .describe("Nombre de la carpeta del caso en fixtures/reto-03/solicitudes/, por ejemplo sol-001");
-const paquete = EsquemaPaquete.describe(
+// Tolerante (campos opcionales): el servidor relee el caso de disco (CA2), así que un
+// paquete incompleto no debe gastar una iteración en ARGS_INVALIDOS; solo genera un aviso.
+const paquete = EsquemaPaqueteRecibido.optional().describe(
   "Paquete normalizado devuelto por oc_leer_paquete, sin cambios",
 );
 
-const AVISO_PAQUETE_DISTINTO =
-  "El paquete recibido difiere de los documentos del caso; se validó con los documentos originales.";
+/** Agrega el aviso de paquete distinto o incompleto, si lo hay, a los datos de la respuesta. */
+const conAviso = <T extends object>(
+  data: T,
+  aviso: string | undefined,
+): T | (T & { aviso: string }) => (aviso === undefined ? data : { ...data, aviso });
 
 const herramientaLeerPaquete = () =>
   definirHerramienta({
@@ -90,8 +95,7 @@ const herramientaValidar = (dependencias: DependenciasHerramientasOc) =>
           dependencias.reloj,
         );
       }
-      const alterado = huella(args.paquete) !== huella(fuente);
-      return exito(alterado ? { ...validacion, aviso: AVISO_PAQUETE_DISTINTO } : validacion);
+      return exito(conAviso(validacion, avisoPaqueteRecibido(args.paquete, fuente)));
     },
   });
 
@@ -104,7 +108,8 @@ const herramientaConstruirPayload = () =>
       paquete,
       derivados: z
         .record(z.string(), z.unknown())
-        .describe("Valores derivados devueltos por oc_validar"),
+        .optional()
+        .describe("Valores derivados devueltos por oc_validar (se recalculan desde el caso)"),
     },
     ejecutar: (args, ctx) => {
       const evaluado = evaluarCaso(ctx.directory, args.caso);
@@ -115,7 +120,8 @@ const herramientaConstruirPayload = () =>
       const orden = construirOrden(fuente, validacion, huellaEvidencia.data);
       if (!orden.ok) return orden;
       const ruta = guardarTrazabilidad(ctx.directory, args.caso, orden.data);
-      return exito({ orden: orden.data.orden, ruta_trazabilidad: ruta });
+      const aviso = avisoPaqueteRecibido(args.paquete, fuente);
+      return exito(conAviso({ orden: orden.data.orden, ruta_trazabilidad: ruta }, aviso));
     },
   });
 
@@ -125,6 +131,21 @@ const herramientaGenerarEvidencia = () =>
       "Genera la evidencia del correo de aprobación (texto con sha256 y PDF) para adjuntarla a la orden de compra.",
     args: { caso },
     ejecutar: (args, ctx) => generarEvidencia(ctx.directory, args.caso),
+  });
+
+const herramientaLeerExcel = () =>
+  definirHerramienta({
+    description:
+      "Lee la primera hoja de un libro .xlsx dentro de fixtures/ y devuelve sus filas con los encabezados como claves.",
+    args: {
+      ruta: z
+        .string()
+        .min(1)
+        .describe(
+          "Ruta del .xlsx relativa a la raíz del proyecto y dentro de fixtures/, por ejemplo fixtures/compras/solicitud.xlsx",
+        ),
+    },
+    ejecutar: (args, ctx) => leerExcel(ctx.directory, args.ruta),
   });
 
 const herramientaCrear = (dependencias: DependenciasHerramientasOc) =>
@@ -153,17 +174,18 @@ const herramientaCrear = (dependencias: DependenciasHerramientasOc) =>
       ),
   });
 
-/** Las cinco herramientas del PRD, por su nombre de export. */
+/** Las herramientas del PRD (cinco P0 y `leer_excel`, P1), por su nombre de export. */
 export interface HerramientasOc {
   readonly leer_paquete: ReturnType<typeof herramientaLeerPaquete>;
   readonly validar: ReturnType<typeof herramientaValidar>;
   readonly construir_payload: ReturnType<typeof herramientaConstruirPayload>;
   readonly generar_evidencia: ReturnType<typeof herramientaGenerarEvidencia>;
   readonly crear: ReturnType<typeof herramientaCrear>;
+  readonly leer_excel: ReturnType<typeof herramientaLeerExcel>;
 }
 
 /**
- * Crea las cinco herramientas del PRD con las dependencias indicadas.
+ * Crea las herramientas del PRD con las dependencias indicadas.
  * @param dependencias - fábrica del adaptador SAP y reloj (por defecto, SAP simulado y reloj del sistema)
  * @returns herramientas indexadas por su nombre de export (el modelo las ve como `oc_<export>`)
  */
@@ -176,6 +198,7 @@ export function crearHerramientasOc(
     construir_payload: herramientaConstruirPayload(),
     generar_evidencia: herramientaGenerarEvidencia(),
     crear: herramientaCrear(dependencias),
+    leer_excel: herramientaLeerExcel(),
   };
 }
 
@@ -184,7 +207,8 @@ export const HERRAMIENTAS_OC = crearHerramientasOc();
 
 /**
  * Exports del contrato del PRD §6.2: `oc_leer_paquete` (HU-1), `oc_validar` (HU-2),
- * `oc_construir_payload` (HU-3), `oc_generar_evidencia` (HU-4) y `oc_crear` (HU-5).
+ * `oc_construir_payload` (HU-3), `oc_generar_evidencia` (HU-4), `oc_crear` (HU-5) y
+ * `oc_leer_excel` (P1 opcional: solicitudes que llegan como `.xlsx`).
  */
-export const { leer_paquete, validar, construir_payload, generar_evidencia, crear } =
+export const { leer_paquete, validar, construir_payload, generar_evidencia, crear, leer_excel } =
   HERRAMIENTAS_OC;

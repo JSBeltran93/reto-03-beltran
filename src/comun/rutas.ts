@@ -1,6 +1,9 @@
 /** Nombres de carpetas y archivos de entrada y salida, en un solo lugar. */
 import path from "node:path";
 
+/** Carpeta de entradas de solo lectura; `oc_leer_excel` no lee fuera de ella. */
+export const CARPETA_FIXTURES = "fixtures";
+
 /** Carpeta donde se escribe todo lo generado en ejecución. */
 export const CARPETA_SALIDA = "out";
 
