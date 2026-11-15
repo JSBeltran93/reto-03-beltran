@@ -20,7 +20,7 @@ npm run dev            # back (tsx watch) + front (Vite) con un solo comando
 | --------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `agent/prompt.md`                 | Comportamiento del agente (system prompt)                                                                 |
 | `src/knowledge/ordenes-compra.md` | Conocimiento del proceso que se agrega al prompt                                                          |
-| `src/tools/oc.ts`                 | Las cinco herramientas `oc_*` (contrato del PRD §6.2)                                                     |
+| `src/tools/oc.ts`                 | Las seis herramientas `oc_*` (contrato del PRD §6.2)                                                      |
 | `src/tools/oc/`                   | Dominio puro: esquemas, extractores, reglas RC1–RC10, validación, payload, evidencia, registro de control |
 | `src/sap/`                        | Puerto `SapAdapter` y simulador `SapSimulado`                                                             |
 | `src/llm/`                        | Puerto `AdaptadorLlm`, `AdaptadorGemini`, el adaptador de respaldo y la fábrica que los compone           |
