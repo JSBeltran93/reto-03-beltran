@@ -56,7 +56,7 @@ describe("Aplicacion", () => {
 
     expect(await screen.findByRole("group", { name: "Llamada a oc_validar" })).toBeInTheDocument();
     expect(screen.getByText(PREGUNTA)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Confirmo" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirmar y crear OC" })).toBeInTheDocument();
   });
 
   it("rehidrata el historial guardado en el servidor al cargar", async () => {
@@ -74,7 +74,7 @@ describe("Aplicacion", () => {
     renderizarConConsultas(<Aplicacion />);
 
     expect(await screen.findByText(PREGUNTA)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Confirmo" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Confirmar y crear OC" })).toBeInTheDocument();
   });
 
   it("muestra los errores del sistema como aviso con reintento", async () => {
@@ -98,7 +98,7 @@ describe("Aplicacion", () => {
       .mockResolvedValueOnce(respuestaSol004);
     renderizarConConsultas(<Aplicacion />);
 
-    await userEvent.click(screen.getByRole("button", { name: /sol-001/ }));
+    await userEvent.click(screen.getByRole("button", { name: "sol-001" }));
     await userEvent.click(await screen.findByRole("button", { name: "Reintentar" }));
 
     expect(await screen.findByText(PREGUNTA)).toBeInTheDocument();

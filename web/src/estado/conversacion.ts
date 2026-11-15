@@ -1,13 +1,6 @@
 import type { EntradaHistorial, RespuestaChat } from "@contratos/contratos-api";
 
-/**
- * Nombres de las herramientas del PRD §6.2 que el front necesita para deducir si,
- * tras recargar, el agente quedó esperando una confirmación.
- */
-const HERRAMIENTAS = {
-  construirPayload: "oc_construir_payload",
-  crear: "oc_crear",
-} as const;
+import { HERRAMIENTAS } from "./herramientas";
 
 /** Error visible en la interfaz. */
 export interface ErrorVisible {
