@@ -220,7 +220,7 @@ function iniciar(): void {
     registradorJson.info("servidor_iniciado", {
       puerto: configuracion.PORT,
       modelo: configuracion.LLM_MODELO,
-      modeloRespaldo: configuracion.LLM_MODELO_RESPALDO,
+      modelosRespaldo: configuracion.LLM_MODELOS_RESPALDO,
       proveedor: PROVEEDOR_LLM,
       claveConfigurada: configuracion.GEMINI_API_KEY !== "",
     });
