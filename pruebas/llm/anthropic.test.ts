@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { aMensajeAnthropic, traducirError } from "../../src/llm/anthropic";
+import { AdaptadorAnthropic, aMensajeAnthropic, traducirError } from "../../src/llm/anthropic";
 
 describe("aMensajeAnthropic", () => {
   it("deja el system prompt fuera de los mensajes", () => {
@@ -62,5 +62,33 @@ describe("traducirError", () => {
 
     expect(r).toMatchObject({ ok: false, error: { codigo } });
     expect(JSON.stringify(r)).not.toContain("sk-");
+  });
+});
+
+describe("AdaptadorAnthropic ante un rechazo del modelo", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("traduce stop_reason=refusal a LLM_RECHAZO para que el respaldo pueda actuar", async () => {
+    vi.spyOn(Anthropic.Messages.prototype, "create").mockResolvedValue({
+      id: "msg_1",
+      type: "message",
+      role: "assistant",
+      model: "modelo-prueba",
+      content: [],
+      stop_reason: "refusal",
+      stop_sequence: null,
+      usage: { input_tokens: 1, output_tokens: 0 },
+    } as unknown as Anthropic.Message);
+    const adaptador = new AdaptadorAnthropic({
+      apiKey: "clave-de-prueba",
+      modelo: "modelo-prueba",
+      timeoutMs: 1000,
+    });
+
+    const resultado = await adaptador.enviar([{ rol: "usuario", contenido: "hola" }], []);
+
+    expect(resultado.ok ? null : resultado.error.codigo).toBe("LLM_RECHAZO");
   });
 });

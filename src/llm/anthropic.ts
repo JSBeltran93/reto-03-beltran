@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 import type { CodigoError } from "../comun/errores";
-import { exito, type Resultado } from "../comun/resultado";
+import { exito, fallo, type Resultado } from "../comun/resultado";
 import type {
   AdaptadorLlm,
   FinRespuesta,
@@ -15,7 +15,10 @@ import type {
 const MAX_TOKENS_RESPUESTA = 16_000;
 
 /** Reintentos automáticos del SDK ante errores transitorios (429, 5xx, red). */
-const REINTENTOS_LLM = 2;
+const REINTENTOS_LLM = 1;
+/** Mensaje cuando el modelo rechaza la solicitud; el adaptador con respaldo prueba otro modelo. */
+const MENSAJE_RECHAZO =
+  "El modelo no puede ayudar con esa solicitud. Reformúlala sobre el proceso de órdenes de compra.";
 
 /** Esfuerzo de razonamiento: las decisiones de negocio son deterministas, basta esfuerzo bajo. */
 const ESFUERZO_LLM = "low";
@@ -201,6 +204,9 @@ export class AdaptadorAnthropic implements AdaptadorLlm {
         },
         opciones.senal ? { signal: opciones.senal } : undefined,
       );
+      if (respuesta.stop_reason === "refusal") {
+        return fallo("LLM_RECHAZO", MENSAJE_RECHAZO);
+      }
       return exito(aRespuesta(respuesta));
     } catch (error) {
       return traducirError(error);
