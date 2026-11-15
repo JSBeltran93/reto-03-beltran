@@ -62,12 +62,23 @@ const FUENTES = {
   derivado: "derivado",
 } as const;
 
+/**
+ * El PRD (HU-3) solo admite las fuentes de `FUENTES`; los valores que vienen del correo y de la
+ * aprobación no son de `solicitud.json`, así que se trazan como `derivado` del paquete y el
+ * detalle nombra el archivo y el campo exactos.
+ */
+const DETALLES_PAQUETE = {
+  correoId: "correo.json: id",
+  aprobadorEmail: "aprobacion.json: de",
+  fechaAprobacion: "aprobacion.json: fecha",
+} as const;
+
 function trazarCabecera(paquete: Paquete, validacion: Validacion): Trazabilidad {
   const { solicitud } = paquete;
   const conCotizacion = paquete.cotizacion !== null;
   return {
     "referencia.solicitud_id": { fuente: FUENTES.solicitud },
-    "referencia.correo_id": { fuente: FUENTES.solicitud, detalle: "correo de la solicitud" },
+    "referencia.correo_id": { fuente: FUENTES.derivado, detalle: DETALLES_PAQUETE.correoId },
     "referencia.cotizacion_ref": conCotizacion
       ? { fuente: FUENTES.cotizacion }
       : { fuente: FUENTES.derivado, detalle: "sin cotización: null" },
@@ -82,8 +93,11 @@ function trazarCabecera(paquete: Paquete, validacion: Validacion): Trazabilidad 
       solicitud.condiciones_pago === undefined
         ? { fuente: FUENTES.maestroProveedores }
         : { fuente: FUENTES.solicitud },
-    "aprobador.email": { fuente: FUENTES.solicitud, detalle: "aprobación adjunta" },
-    "aprobador.fecha_aprobacion": { fuente: FUENTES.solicitud, detalle: "aprobación adjunta" },
+    "aprobador.email": { fuente: FUENTES.derivado, detalle: DETALLES_PAQUETE.aprobadorEmail },
+    "aprobador.fecha_aprobacion": {
+      fuente: FUENTES.derivado,
+      detalle: DETALLES_PAQUETE.fechaAprobacion,
+    },
     "aprobador.evidencia_sha256": { fuente: FUENTES.derivado, detalle: "sha256 de la evidencia" },
     excepciones: { fuente: FUENTES.derivado, detalle: "confirmaciones de las reglas de control" },
   };

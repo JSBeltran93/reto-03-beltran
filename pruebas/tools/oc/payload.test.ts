@@ -87,5 +87,18 @@ describe("construirOrden", () => {
         expect.arrayContaining(["posiciones[0].numero", "excepciones", "aprobador.email"]),
       );
     });
+
+    it.each([
+      ["referencia.correo_id", "correo.json"],
+      ["aprobador.email", "aprobacion.json"],
+      ["aprobador.fecha_aprobacion", "aprobacion.json"],
+    ])("no atribuye %s a la solicitud: nombra %s como origen", (campo, archivo) => {
+      const resultado = ordenDe("sol-001");
+      if (!resultado.ok) throw new Error("sol-001 debería ser apta");
+      const traza = resultado.data.trazabilidad[campo];
+
+      expect(traza?.fuente).not.toBe("solicitud");
+      expect(traza?.detalle).toContain(archivo);
+    });
   });
 });
