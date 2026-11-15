@@ -4,7 +4,7 @@ import type { VistaLlamada } from "../comun/contratos-api";
 import type { CodigoError } from "../comun/errores";
 import { EsquemaResultadoSerializado, fallo } from "../comun/resultado";
 import type { HerramientaLlm, LlamadaHerramienta } from "../llm/adapter";
-import * as herramientasOc from "../tools/oc";
+import { HERRAMIENTAS_OC } from "../tools/oc";
 import type { ContextoHerramienta, Herramienta } from "../tools/oc/herramienta";
 import { NOMBRES_HERRAMIENTAS, PREFIJO_HERRAMIENTA } from "../tools/oc/nombres";
 
@@ -19,14 +19,15 @@ export interface Ejecucion {
 }
 
 /**
- * Arma el catálogo: cada export de `src/tools/oc.ts` es `oc_<export>` (PRD §6.2).
- * @returns herramientas indexadas por nombre
+ * Arma el catálogo: cada herramienta de `src/tools/oc.ts` es `oc_<export>` (PRD §6.2).
+ * @param herramientas - herramientas por nombre de export (por defecto, las del PRD)
+ * @returns herramientas indexadas por el nombre que ve el modelo
  */
-export function catalogoOc(): Catalogo {
+export function catalogoOc(herramientas: object = HERRAMIENTAS_OC): Catalogo {
   return Object.fromEntries(
-    Object.entries(herramientasOc).map(([nombre, herramienta]) => [
+    Object.entries(herramientas).map(([nombre, herramienta]) => [
       `${PREFIJO_HERRAMIENTA}${nombre}`,
-      herramienta as unknown as Herramienta<z.ZodRawShape>,
+      herramienta as Herramienta<z.ZodRawShape>,
     ]),
   );
 }
@@ -42,6 +43,15 @@ export function definicionesLlm(catalogo: Catalogo): HerramientaLlm[] {
     delete esquema.$schema;
     return { nombre, descripcion: herramienta.description, esquema };
   });
+}
+
+/** Resumen de una herramienta sin resumen propio. */
+const RESUMEN_GENERICO = "herramienta ejecutada";
+
+function faltantes(lista: unknown): string {
+  return Array.isArray(lista) && lista.length
+    ? `paquete leído · faltan: ${lista.map(String).join(", ")}`
+    : "paquete leído · completo";
 }
 
 function reglas(hallazgos: unknown): string {
@@ -61,8 +71,10 @@ function resumir(nombre: string, data: unknown): string {
       return `evidencia en ${String(d.ruta)}`;
     case NOMBRES_HERRAMIENTAS.crear:
       return `OC ${String(d.numero_oc)}${d.idempotente ? " (ya existía)" : ""}`;
+    case NOMBRES_HERRAMIENTAS.leerPaquete:
+      return faltantes(d.faltantes);
     default:
-      return "paquete leído";
+      return RESUMEN_GENERICO;
   }
 }
 
@@ -119,7 +131,13 @@ export async function ejecutarLlamada(
     ? resumir(llamada.nombre, resultado.data)
     : `${resultado.error?.codigo ?? "ERROR"}: ${resultado.error?.mensaje ?? ""}`;
   return {
-    vista: { nombre: llamada.nombre, args: llamada.args, ok: resultado.ok, resumen },
+    vista: {
+      nombre: llamada.nombre,
+      args: llamada.args,
+      ok: resultado.ok,
+      resumen,
+      ...(resultado.ok && { datos: resultado.data }),
+    },
     json,
     data: resultado.ok ? resultado.data : undefined,
   };

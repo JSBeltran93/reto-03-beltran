@@ -6,6 +6,9 @@ import { MAX_DESCRIPCION_SAP, ORGANIZACION_COMPRAS, SOCIEDAD } from "./constante
 /** Fecha calendario válida con formato YYYY-MM-DD (rechaza, p. ej., 2026-13-45). */
 const fechaIso = z.iso.date();
 
+/** Fecha-hora ISO con zona horaria (como llegan los correos) o fecha simple. */
+const fechaHoraIso = z.union([z.iso.datetime({ offset: true }), z.iso.date()]);
+
 /** Solicitud de compra (`solicitud.xlsx` normalizado), PRD §7.1. */
 export const EsquemaSolicitud = z.object({
   solicitud_id: z.string().min(1),
@@ -40,7 +43,7 @@ export const EsquemaCorreoArchivo = z.object({
 export const EsquemaAprobacionArchivo = z.object({
   de: z.string(),
   para: z.string(),
-  fecha: z.string(),
+  fecha: fechaHoraIso,
   asunto: z.string(),
   cuerpo: z.string(),
 });

@@ -119,7 +119,8 @@ describe("ciclo del agente", () => {
     expect(r.reply).toContain("Resumen");
     const cierre = llm.peticiones.at(-1);
     expect(cierre?.herramientas.length).toBeGreaterThan(0);
-    expect(cierre?.opciones).toEqual({ sinLlamadas: true });
+    expect(cierre?.opciones).toMatchObject({ sinLlamadas: true });
+    expect(cierre?.opciones.senal).toBeInstanceOf(AbortSignal);
   });
 
   it("muestra con claridad los errores del proveedor y mantiene viva la sesión (CA5)", async () => {

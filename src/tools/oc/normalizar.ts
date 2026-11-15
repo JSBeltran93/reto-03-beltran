@@ -31,6 +31,15 @@ export function fechaCalendario(iso: string): string {
   return iso.slice(0, 10);
 }
 
+/** La palabra "aprobado" completa (no "desaprobado"). */
+const PALABRA_APROBADO = /\baprobado\b/;
+
+/**
+ * "no" seguido de hasta tres palabras y "aprobado": "no aprobado", "no está aprobado",
+ * "aún no ha sido aprobado".
+ */
+const NEGACION_APROBADO = /\bno\s+(?:\S+\s+){0,3}aprobado\b/;
+
 /**
  * Detecta una aprobación explícita en el cuerpo de un correo.
  * @param texto - cuerpo del correo
@@ -38,5 +47,5 @@ export function fechaCalendario(iso: string): string {
  */
 export function contieneAprobado(texto: string): boolean {
   const limpio = sinTildes(texto).toLowerCase();
-  return /\baprobado\b/.test(limpio) && !/\bno\s+aprobado\b/.test(limpio);
+  return PALABRA_APROBADO.test(limpio) && !NEGACION_APROBADO.test(limpio);
 }

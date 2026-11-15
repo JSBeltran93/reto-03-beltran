@@ -15,7 +15,8 @@ export interface Registrador {
 }
 
 function escribir(nivel: "info" | "error", evento: string, datos?: Record<string, unknown>): void {
-  const linea = JSON.stringify({ ts: new Date().toISOString(), nivel, evento, ...datos });
+  // Los campos base van al final para que los datos no puedan sobrescribirlos.
+  const linea = JSON.stringify({ ...datos, ts: new Date().toISOString(), nivel, evento });
   if (nivel === "error") {
     console.error(linea);
   } else {

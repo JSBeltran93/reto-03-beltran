@@ -46,6 +46,8 @@ export interface OpcionesEnvio {
    * (cambiarlas invalidaría el historial y la caché) pero no puede llamarlas.
    */
   readonly sinLlamadas?: boolean;
+  /** Señal para cancelar la consulta cuando se agota el plazo del turno. */
+  readonly senal?: AbortSignal;
 }
 
 /** Respuesta del modelo en forma neutral. */

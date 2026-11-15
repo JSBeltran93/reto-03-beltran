@@ -1,11 +1,21 @@
-import { cpSync, mkdtempSync } from "node:fs";
+import { cpSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { afterAll } from "vitest";
 
 import type { ContextoHerramienta } from "../../src/tools/oc/herramienta";
 
 /** Raíz del repositorio, donde viven los fixtures reales. */
 export const RAIZ_PROYECTO = path.resolve(import.meta.dirname, "../..");
+
+/** Raíces temporales creadas por el archivo de pruebas en curso. */
+const raicesTemporales: string[] = [];
+
+// Cada archivo de pruebas importa este módulo: al terminar se borran sus raíces temporales.
+afterAll(() => {
+  for (const raiz of raicesTemporales.splice(0)) rmSync(raiz, { recursive: true, force: true });
+});
 
 /**
  * Copia los fixtures a una raíz temporal para que los tests puedan escribir `out/` o dañar archivos.
@@ -14,6 +24,7 @@ export const RAIZ_PROYECTO = path.resolve(import.meta.dirname, "../..");
 export function crearProyectoTemporal(): string {
   const raiz = mkdtempSync(path.join(tmpdir(), "reto03-"));
   cpSync(path.join(RAIZ_PROYECTO, "fixtures"), path.join(raiz, "fixtures"), { recursive: true });
+  raicesTemporales.push(raiz);
   return raiz;
 }
 
