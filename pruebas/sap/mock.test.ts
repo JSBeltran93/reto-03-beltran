@@ -54,4 +54,18 @@ describe("SapSimulado", () => {
     });
     expect(await sap.consultarProveedor("123")).toBeNull();
   });
+
+  it("no crea una segunda OC para la misma solicitud aunque lleguen en paralelo", async () => {
+    const raiz = crearProyectoTemporal();
+    const sap = new SapSimulado(raiz, relojFijo("2026-09-01T10:00:00Z"));
+    const orden = ordenDe("sol-001");
+
+    const [a, b] = await Promise.all([sap.crearOrden(orden), sap.crearOrden(orden)]);
+
+    expect(a.numero_oc).toBe(b.numero_oc);
+    const lineas = readFileSync(path.join(raiz, "out/sap/ordenes.jsonl"), "utf8")
+      .trim()
+      .split("\n");
+    expect(lineas).toHaveLength(1);
+  });
 });
