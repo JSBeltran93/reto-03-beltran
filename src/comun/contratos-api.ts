@@ -6,7 +6,7 @@ import { z } from "zod";
 
 /** Cuerpo de POST /api/chat. */
 export const EsquemaSolicitudChat = z.object({
-  sessionId: z.string().min(1).max(100),
+  sessionId: z.uuid(),
   message: z.string().trim().min(1).max(4000),
 });
 /** Cuerpo de POST /api/chat. */
@@ -27,6 +27,8 @@ export const EsquemaRespuestaChat = z.object({
   reply: z.string(),
   toolCalls: z.array(EsquemaVistaLlamada),
   needsConfirmation: z.boolean(),
+  /** true cuando `reply` es un error del sistema (modelo no disponible, presupuesto agotado…). */
+  esError: z.boolean().optional(),
 });
 /** Respuesta de POST /api/chat. */
 export type RespuestaChat = z.infer<typeof EsquemaRespuestaChat>;

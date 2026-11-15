@@ -4,6 +4,7 @@ import type {
   HerramientaLlm,
   LlamadaHerramienta,
   MensajeLlm,
+  OpcionesEnvio,
   RespuestaLlm,
 } from "../../src/llm/adapter";
 
@@ -18,6 +19,7 @@ export class LlmFalso implements AdaptadorLlm {
   readonly peticiones: {
     mensajes: readonly MensajeLlm[];
     herramientas: readonly HerramientaLlm[];
+    opciones: OpcionesEnvio;
   }[] = [];
 
   /** @param guion - respuestas que se devuelven en orden */
@@ -27,8 +29,9 @@ export class LlmFalso implements AdaptadorLlm {
   enviar(
     mensajes: readonly MensajeLlm[],
     herramientas: readonly HerramientaLlm[],
+    opciones: OpcionesEnvio = {},
   ): Promise<Resultado<RespuestaLlm>> {
-    this.peticiones.push({ mensajes: [...mensajes], herramientas });
+    this.peticiones.push({ mensajes: [...mensajes], herramientas, opciones });
     const paso = this.guion.shift();
     if (paso === undefined) return Promise.resolve(respuestaTexto("(fin del guion)"));
     return Promise.resolve(typeof paso === "function" ? paso(mensajes) : paso);
@@ -68,4 +71,17 @@ export function ultimoResultado(mensajes: readonly MensajeLlm[], indice = 0): un
   const ultimo = [...mensajes].reverse().find((m) => m.rol === "resultados");
   const contenido = ultimo?.rol === "resultados" ? ultimo.resultados[indice]?.contenido : undefined;
   return contenido === undefined ? undefined : JSON.parse(contenido);
+}
+
+/**
+ * @param fin - motivo de fin anómalo del modelo
+ * @returns respuesta truncada o rechazada que además pide una herramienta
+ */
+export function respuestaConFin(fin: "limite" | "rechazo"): Resultado<RespuestaLlm> {
+  return exito({
+    texto: "parcial",
+    llamadas: [{ id: "llamada_truncada", nombre: "oc_leer_paquete", args: { caso: "sol-001" } }],
+    uso: { entrada: 10, salida: 5 },
+    fin,
+  });
 }

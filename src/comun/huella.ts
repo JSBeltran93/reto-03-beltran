@@ -5,7 +5,7 @@ function canonizar(valor: unknown): unknown {
   if (valor !== null && typeof valor === "object") {
     const entradas = Object.entries(valor as Record<string, unknown>)
       .filter(([, v]) => v !== undefined)
-      .sort(([a], [b]) => a.localeCompare(b));
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
     return Object.fromEntries(entradas.map(([k, v]) => [k, canonizar(v)]));
   }
   return valor;

@@ -1,13 +1,15 @@
+import { existsSync } from "node:fs";
+
 import { z } from "zod";
 
 import { huella } from "../../comun/huella";
 import type { Reloj } from "../../comun/reloj";
 import { exito, fallo, type Resultado } from "../../comun/resultado";
-import { ARCHIVOS_SALIDA, rutaSalidaRelativa } from "../../comun/rutas";
+import { ARCHIVOS_SALIDA, rutaSalida, rutaSalidaRelativa } from "../../comun/rutas";
 import type { OrdenRegistrada, SapAdapter } from "../../sap/adapter";
 import { type CasoEvaluado, evaluarCaso } from "./caso";
 import type { OrdenCompra } from "./esquemas";
-import { hashEvidenciaCaso } from "./evidencia";
+import { generarEvidencia, hashEvidenciaCaso } from "./evidencia";
 import { NOMBRES_HERRAMIENTAS } from "./nombres";
 import { construirOrden } from "./payload";
 import { registrarControl, type ResultadoControl, RESULTADOS_CONTROL } from "./registro-control";
@@ -110,6 +112,13 @@ function respuestaIdempotente(
   });
 }
 
+/** Genera la evidencia si el modelo no la pidió antes, para que `ruta_evidencia` siempre exista. */
+async function asegurarEvidencia(raiz: string, caso: string): Promise<Resultado<true>> {
+  if (existsSync(rutaSalida(raiz, caso, ARCHIVOS_SALIDA.evidenciaTexto))) return exito(true);
+  const evidencia = await generarEvidencia(raiz, caso);
+  return evidencia.ok ? exito(true) : evidencia;
+}
+
 /**
  * Crea la orden de compra de un caso en SAP (HU-5).
  * Verifica en orden: idempotencia → reglas de bloqueo → confirmación del usuario →
@@ -145,6 +154,8 @@ export async function crearOrdenCaso(
       `Vuelva a ejecutar ${NOMBRES_HERRAMIENTAS.construirPayload} y envíe su resultado sin cambios.`,
     );
   }
+  const evidencia = await asegurarEvidencia(deps.raiz, pedido.caso);
+  if (!evidencia.ok) return evidencia;
   const creada = await deps.sap.crearOrden(
     conExcepcionesConfirmadas(esperada.data, deps.confirmadoPor),
   );

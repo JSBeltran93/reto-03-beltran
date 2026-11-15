@@ -14,6 +14,7 @@ import { AlmacenSesiones } from "./agente/sesiones";
 import { EsquemaSolicitudChat, type Salud, type VistaSesion } from "./comun/contratos-api";
 import { registradorJson } from "./comun/registrador";
 import { relojSistema } from "./comun/reloj";
+import { RUTAS_API } from "./comun/rutas-api";
 import { cargarConfiguracion } from "./configuracion";
 import { AdaptadorAnthropic } from "./llm/anthropic";
 
@@ -25,7 +26,22 @@ export interface DependenciasAplicacion {
 }
 
 /** Códigos HTTP usados por la API. */
-const HTTP = { solicitudInvalida: 400, noEncontrado: 404, errorInterno: 500 } as const;
+const HTTP = {
+  solicitudInvalida: 400,
+  noEncontrado: 404,
+  errorInterno: 500,
+  primerErrorCliente: 400,
+  primerErrorServidor: 500,
+} as const;
+
+/** Mensajes de la API para errores HTTP (sin detalles internos). */
+const MENSAJES_HTTP = {
+  solicitudInvalida: "Solicitud inválida: se requieren sessionId (UUID) y message.",
+  sesionNoEncontrada: "Sesión no encontrada.",
+  rutaNoEncontrada: "Ruta de la API no encontrada.",
+  errorCliente: "La solicitud no se pudo procesar. Revisa el formato y el tamaño del mensaje.",
+  errorInterno: "Error interno. Intenta de nuevo.",
+} as const;
 
 /** Tamaño máximo del cuerpo JSON aceptado. */
 const LIMITE_CUERPO_JSON = "32kb";
@@ -38,7 +54,7 @@ function cabecerasSeguridad(_req: Request, res: Response, next: NextFunction): v
 }
 
 function rutasApi(app: Express, deps: DependenciasAplicacion): void {
-  app.get("/api/health", (_req, res) => {
+  app.get(RUTAS_API.salud, (_req, res) => {
     const salud: Salud = {
       ok: true,
       provider: deps.ciclo.llm.proveedor,
@@ -47,26 +63,52 @@ function rutasApi(app: Express, deps: DependenciasAplicacion): void {
     res.json(salud);
   });
 
-  app.post("/api/chat", async (req, res) => {
+  app.post(RUTAS_API.chat, async (req, res) => {
     const cuerpo = EsquemaSolicitudChat.safeParse(req.body);
     if (!cuerpo.success) {
-      res
-        .status(HTTP.solicitudInvalida)
-        .json({ error: "Solicitud inválida: se requieren sessionId y message." });
+      res.status(HTTP.solicitudInvalida).json({ error: MENSAJES_HTTP.solicitudInvalida });
       return;
     }
     res.json(await ejecutarTurno(deps.ciclo, cuerpo.data.sessionId, cuerpo.data.message));
   });
 
-  app.get("/api/sessions/:id", (req, res) => {
+  app.get(RUTAS_API.sesionPatron, (req, res) => {
     const sesion = deps.ciclo.sesiones.obtener(req.params.id);
     if (!sesion) {
-      res.status(HTTP.noEncontrado).json({ error: "Sesión no encontrada." });
+      res.status(HTTP.noEncontrado).json({ error: MENSAJES_HTTP.sesionNoEncontrada });
       return;
     }
     const vista: VistaSesion = { id: sesion.id, historial: sesion.historial };
     res.json(vista);
   });
+
+  app.all(RUTAS_API.desconocidaPatron, (_req, res) => {
+    res.status(HTTP.noEncontrado).json({ error: MENSAJES_HTTP.rutaNoEncontrada });
+  });
+}
+
+/** Estado HTTP de un error de cliente (JSON mal formado, cuerpo muy grande), o null. */
+function estadoErrorCliente(err: unknown): number | null {
+  const estado = (err as { status?: unknown } | null)?.status;
+  return typeof estado === "number" &&
+    estado >= HTTP.primerErrorCliente &&
+    estado < HTTP.primerErrorServidor
+    ? estado
+    : null;
+}
+
+function manejarError(deps: DependenciasAplicacion) {
+  return (err: unknown, _req: Request, res: Response, _next: NextFunction): void => {
+    const estadoCliente = estadoErrorCliente(err);
+    if (estadoCliente !== null) {
+      res.status(estadoCliente).json({ error: MENSAJES_HTTP.errorCliente });
+      return;
+    }
+    deps.ciclo.registrador.error("error_http", {
+      tipo: err instanceof Error ? err.constructor.name : "desconocido",
+    });
+    res.status(HTTP.errorInterno).json({ error: MENSAJES_HTTP.errorInterno });
+  };
 }
 
 /**
@@ -84,12 +126,7 @@ export function crearAplicacion(deps: DependenciasAplicacion): Express {
   app.get("/{*splat}", (_req, res) => {
     res.sendFile(path.join(deps.carpetaEstaticos, "index.html"));
   });
-  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-    deps.ciclo.registrador.error("error_http", {
-      mensaje: err instanceof Error ? err.message : "desconocido",
-    });
-    res.status(HTTP.errorInterno).json({ error: "Error interno. Intenta de nuevo." });
-  });
+  app.use(manejarError(deps));
   return app;
 }
 

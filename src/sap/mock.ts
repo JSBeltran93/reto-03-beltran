@@ -68,7 +68,15 @@ export class SapSimulado implements SapAdapter {
     );
   }
 
+  /**
+   * Guarda la orden dentro de la cola de escritura. Si ya existe una orden para la misma
+   * solicitud la devuelve sin crear otra: la idempotencia no depende del llamador.
+   */
   private guardar(orden: OrdenCompra): OrdenRegistrada {
+    const existente = this.leerTodas().find(
+      (o) => o.orden.referencia.solicitud_id === orden.referencia.solicitud_id,
+    );
+    if (existente) return { numero_oc: existente.numero_oc, fecha: existente.fecha };
     const numero_oc = String(BASE_NUMERO_OC + this.leerTodas().length + 1);
     const fecha = this.reloj.ahora().toISOString();
     mkdirSync(dirname(this.archivo), { recursive: true });
