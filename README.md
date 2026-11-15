@@ -83,7 +83,7 @@ flowchart LR
   Web["web/ — chat React"] -->|HTTP JSON| Server["src/server.ts — API"]
   Server --> Agente["src/agente/ — ciclo y confirmación"]
   Agente --> LLM["src/llm/ — modelo principal + respaldo"]
-  Agente --> Tools["src/tools/oc.ts — 5 herramientas"]
+  Agente --> Tools["src/tools/oc.ts — 6 herramientas"]
   Tools --> Dominio["src/tools/oc/ — reglas RC1–RC10, payload, evidencia"]
   Dominio --> SAP["src/sap/ — SAP simulado"]
 ```
@@ -97,7 +97,7 @@ src/
 ├── configuracion.ts              variables de entorno validadas con zod
 ├── agente/                       ciclo, compuerta de confirmación, sesiones, bitácora
 ├── llm/                          puerto AdaptadorLlm, gemini.ts, respaldo.ts y fabrica.ts
-├── tools/oc.ts · tools/oc/       las 5 herramientas oc_* y el dominio
+├── tools/oc.ts · tools/oc/       las 6 herramientas oc_* y el dominio
 ├── sap/                          puerto SapAdapter y SAP simulado
 ├── comun/                        resultado, errores, reloj, registrador, contratos y rutas
 └── knowledge/ordenes-compra.md   conocimiento del proceso
@@ -120,7 +120,7 @@ Railway con configuración como código (`railway.json`): build por defecto de R
 ## Bonus: módulo reutilizable (`modulo/`)
 
 - `modulo/agent.md`: frontmatter (`description`, `mode: primary`, `permission: {edit: deny, bash: deny}`) y el contenido de `agent/prompt.md`.
-- `modulo/tools/oc.ts`: re-exporta solo las 5 herramientas de `src/tools/oc.ts` (las mismas, no una copia).
+- `modulo/tools/oc.ts`: re-exporta solo las 6 herramientas de `src/tools/oc.ts` (las 5 P0 y `oc_leer_excel`) (las mismas, no una copia).
 - `modulo/skill/ordenes-compra/SKILL.md`: frontmatter (`name`, `description`) y el contenido de `src/knowledge/ordenes-compra.md`.
 
 `pruebas/modulo.test.ts` falla si alguna copia diverge de su fuente.
