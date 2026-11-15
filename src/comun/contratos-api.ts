@@ -29,6 +29,8 @@ export const EsquemaRespuestaChat = z.object({
   reply: z.string(),
   toolCalls: z.array(EsquemaVistaLlamada),
   needsConfirmation: z.boolean(),
+  /** Caso pendiente más reciente: el que se crearía con un "Confirmo". */
+  casoPendiente: z.string().nullable().optional(),
   /** true cuando `reply` es un error del sistema (modelo no disponible, presupuesto agotado…). */
   esError: z.boolean().optional(),
 });
@@ -49,6 +51,10 @@ export type EntradaHistorial = z.infer<typeof EsquemaEntradaHistorial>;
 export const EsquemaVistaSesion = z.object({
   id: z.string(),
   historial: z.array(EsquemaEntradaHistorial),
+  /** Estado real de la compuerta de confirmación de la sesión (CA3). */
+  needsConfirmation: z.boolean(),
+  /** Caso pendiente más reciente, o null. */
+  casoPendiente: z.string().nullable(),
 });
 /** Respuesta de GET /api/sessions/:id. */
 export type VistaSesion = z.infer<typeof EsquemaVistaSesion>;

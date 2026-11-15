@@ -11,7 +11,7 @@ import type {
   ResultadoHerramienta,
 } from "../llm/adapter";
 import { registrarLlamada } from "./bitacora";
-import { alMensajeUsuario, autorizar, trasHerramienta } from "./confirmacion";
+import { alMensajeUsuario, autorizar, casoPendiente, trasHerramienta } from "./confirmacion";
 import {
   type Catalogo,
   catalogoOc,
@@ -45,13 +45,13 @@ const CATALOGO_POR_DEFECTO = catalogoOc();
 const definicionesPorCatalogo = new WeakMap<Catalogo, readonly HerramientaLlm[]>();
 
 /** Catálogo del turno: el inyectado o el por defecto. */
-function catalogoDe(deps: DependenciasCiclo): Catalogo {
-  return deps.catalogo ?? CATALOGO_POR_DEFECTO;
+function catalogoDe(dependencias: DependenciasCiclo): Catalogo {
+  return dependencias.catalogo ?? CATALOGO_POR_DEFECTO;
 }
 
 /** Definiciones JSON Schema del catálogo, calculadas una vez por catálogo. */
-function herramientasDe(deps: DependenciasCiclo): readonly HerramientaLlm[] {
-  const catalogo = catalogoDe(deps);
+function herramientasDe(dependencias: DependenciasCiclo): readonly HerramientaLlm[] {
+  const catalogo = catalogoDe(dependencias);
   const enCache = definicionesPorCatalogo.get(catalogo);
   if (enCache) return enCache;
   const definiciones = definicionesLlm(catalogo);
@@ -77,7 +77,7 @@ const turnosEnCurso = new Map<string, Promise<unknown>>();
 
 interface Turno {
   readonly sesion: Sesion;
-  readonly deps: DependenciasCiclo;
+  readonly dependencias: DependenciasCiclo;
   readonly llamadas: VistaLlamada[];
   /** Se activa cuando se agota el plazo del turno. */
   readonly senal: AbortSignal;
@@ -92,7 +92,8 @@ function responder(
   return {
     reply: texto,
     toolCalls: turno.llamadas,
-    needsConfirmation: turno.sesion.confirmacion.pendiente !== null,
+    needsConfirmation: turno.sesion.confirmacion.pendientes.length > 0,
+    casoPendiente: casoPendiente(turno.sesion.confirmacion),
     ...(tipo === "error" && { esError: true }),
   };
 }
@@ -102,25 +103,25 @@ function hoy(reloj: Reloj): string {
 }
 
 function presupuestoAgotado(turno: Turno): boolean {
-  const { sesion, deps } = turno;
+  const { sesion, dependencias } = turno;
   return (
-    sesion.tokensUsados >= deps.maxTokensSesion ||
-    deps.sesiones.presupuestoDiarioAgotado(hoy(deps.reloj))
+    sesion.tokensUsados >= dependencias.maxTokensSesion ||
+    dependencias.sesiones.presupuestoDiarioAgotado(hoy(dependencias.reloj))
   );
 }
 
 /** Ejecuta la llamada; cualquier excepción se vuelve ERROR_INTERNO para que la sesión siga viva (CA5). */
 async function ejecutarSeguro(turno: Turno, llamada: LlamadaHerramienta): Promise<Ejecucion> {
-  const { sesion, deps } = turno;
+  const { sesion, dependencias } = turno;
   const denegada = autorizar(sesion.confirmacion, llamada);
   if (denegada) return denegada;
   try {
-    return await ejecutarLlamada(catalogoDe(deps), llamada, {
-      directory: deps.raiz,
+    return await ejecutarLlamada(catalogoDe(dependencias), llamada, {
+      directory: dependencias.raiz,
       sessionId: sesion.id,
     });
   } catch (error) {
-    deps.registrador.error("error_herramienta", {
+    dependencias.registrador.error("error_herramienta", {
       herramienta: llamada.nombre,
       tipo: error instanceof Error ? error.constructor.name : "desconocido",
     });
@@ -130,16 +131,16 @@ async function ejecutarSeguro(turno: Turno, llamada: LlamadaHerramienta): Promis
 
 /** Escribe la bitácora; si falla, solo lo registra: la auditoría no debe romper el turno. */
 function auditar(turno: Turno, vista: VistaLlamada, inicio: number): void {
-  const { sesion, deps } = turno;
+  const { sesion, dependencias } = turno;
   try {
-    registrarLlamada(deps.raiz, {
+    registrarLlamada(dependencias.raiz, {
       sessionId: sesion.id,
       llamada: vista,
       duracionMs: Date.now() - inicio,
-      ts: deps.reloj.ahora().toISOString(),
+      ts: dependencias.reloj.ahora().toISOString(),
     });
   } catch (error) {
-    deps.registrador.error("error_bitacora", {
+    dependencias.registrador.error("error_bitacora", {
       tipo: error instanceof Error ? error.constructor.name : "desconocido",
     });
   }
@@ -155,27 +156,27 @@ async function ejecutarHerramienta(
   turno.llamadas.push(ejecucion.vista);
   turno.sesion.historial.push({ tipo: "herramienta", llamada: ejecucion.vista });
   auditar(turno, ejecucion.vista, inicio);
-  return { id: llamada.id, contenido: ejecucion.json, error: !ejecucion.vista.ok };
+  return { id: llamada.id, contenido: ejecucion.serializado, error: !ejecucion.vista.ok };
 }
 
 async function consultarModelo(
   turno: Turno,
   opciones: OpcionesEnvio = {},
 ): ReturnType<AdaptadorLlm["enviar"]> {
-  const { sesion, deps } = turno;
+  const { sesion, dependencias } = turno;
   const mensajes: MensajeLlm[] = [
-    { rol: "sistema", contenido: deps.promptSistema },
+    { rol: "sistema", contenido: dependencias.promptSistema },
     ...sesion.mensajes,
   ];
-  const resultado = await deps.llm.enviar(mensajes, herramientasDe(deps), {
+  const resultado = await dependencias.llm.enviar(mensajes, herramientasDe(dependencias), {
     ...opciones,
     senal: turno.senal,
   });
   if (resultado.ok) {
     const { entrada, salida } = resultado.data.uso;
-    deps.sesiones.registrarTokens(sesion, entrada + salida, hoy(deps.reloj));
+    dependencias.sesiones.registrarTokens(sesion, entrada + salida, hoy(dependencias.reloj));
   } else {
-    deps.registrador.error("error_llm", {
+    dependencias.registrador.error("error_llm", {
       sessionId: sesion.id,
       codigo: resultado.error.codigo,
       ...resultado.error.diagnostico,
@@ -213,18 +214,18 @@ async function procesarRespuesta(
 }
 
 async function ejecutarTurnoSinBloqueo(
-  deps: DependenciasCiclo,
+  dependencias: DependenciasCiclo,
   sessionId: string,
   mensaje: string,
 ): Promise<RespuestaChat> {
-  const sesion = deps.sesiones.obtenerOCrear(sessionId);
-  const senal = AbortSignal.timeout(deps.maxSegundosTurno * MS_POR_SEGUNDO);
-  const turno: Turno = { sesion, deps, llamadas: [], senal };
+  const sesion = dependencias.sesiones.obtenerOCrear(sessionId);
+  const senal = AbortSignal.timeout(dependencias.maxSegundosTurno * MS_POR_SEGUNDO);
+  const turno: Turno = { sesion, dependencias, llamadas: [], senal };
   alMensajeUsuario(sesion.confirmacion, mensaje);
   sesion.historial.push({ tipo: "usuario", texto: mensaje });
   sesion.mensajes.push({ rol: "usuario", contenido: mensaje });
 
-  for (let iteracion = 0; iteracion < deps.maxIteraciones; iteracion++) {
+  for (let iteracion = 0; iteracion < dependencias.maxIteraciones; iteracion++) {
     if (presupuestoAgotado(turno)) return responder(turno, MENSAJES_SISTEMA.presupuesto, "error");
     if (senal.aborted) return responder(turno, MENSAJES_SISTEMA.plazo, "error");
     const resultado = await consultarModelo(turno);
@@ -241,18 +242,18 @@ async function ejecutarTurnoSinBloqueo(
  * llamada se valida, pasa por la compuerta de confirmación (CA3) y se registra (CA4);
  * todo error se vuelve un mensaje claro y la sesión sigue viva (CA5). Los turnos de una
  * misma sesión se ejecutan en orden para no mezclar el historial.
- * @param deps - dependencias del ciclo
+ * @param dependencias - dependencias del ciclo
  * @param sessionId - sesión enviada por el front
  * @param mensaje - mensaje del usuario
  * @returns respuesta, llamadas de este turno y si hay una confirmación pendiente
  */
 export async function ejecutarTurno(
-  deps: DependenciasCiclo,
+  dependencias: DependenciasCiclo,
   sessionId: string,
   mensaje: string,
 ): Promise<RespuestaChat> {
   const anterior = turnosEnCurso.get(sessionId) ?? Promise.resolve();
-  const actual = anterior.then(() => ejecutarTurnoSinBloqueo(deps, sessionId, mensaje));
+  const actual = anterior.then(() => ejecutarTurnoSinBloqueo(dependencias, sessionId, mensaje));
   const cola = actual.catch(() => undefined);
   turnosEnCurso.set(sessionId, cola);
   void cola.then(() => {
