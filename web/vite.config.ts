@@ -7,8 +7,8 @@ import { defineConfig } from "vite";
 
 /** Grupos de librerías en archivos aparte: cambian poco y el navegador los guarda en caché. */
 const GRUPOS_LIBRERIAS: Readonly<Record<string, readonly string[]>> = {
-  "lib-react": ["/react/", "/react-dom/", "/scheduler/"],
-  "lib-markdown": [
+  "bib-react": ["/react/", "/react-dom/", "/scheduler/"],
+  "bib-markdown": [
     "react-markdown",
     "remark",
     "micromark",
@@ -18,7 +18,7 @@ const GRUPOS_LIBRERIAS: Readonly<Record<string, readonly string[]>> = {
     "unist",
     "vfile",
   ],
-  "lib-datos": ["@tanstack", "axios", "zod"],
+  "bib-datos": ["@tanstack", "axios", "zod"],
 };
 
 /**

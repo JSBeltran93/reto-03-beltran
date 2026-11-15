@@ -1,11 +1,9 @@
-import { AvisoError } from "./componentes/AvisoError";
-import { BannerConfirmacion } from "./componentes/BannerConfirmacion";
+import { AvisosConversacion } from "./componentes/AvisosConversacion";
 import { Encabezado } from "./componentes/Encabezado";
 import { EstadoVacio } from "./componentes/EstadoVacio";
-import { IndicadorPensando } from "./componentes/IndicadorPensando";
 import { ListaMensajes } from "./componentes/ListaMensajes";
 import { PieCompositor } from "./componentes/PieCompositor";
-import { RESPUESTAS_CONFIRMACION } from "./componentes/textos";
+import { useDesplazarAlFinal } from "./componentes/useDesplazarAlFinal";
 import { useSalud } from "./consultas/useSalud";
 import { useConversacion } from "./estado/useConversacion";
 
@@ -16,30 +14,32 @@ import { useConversacion } from "./estado/useConversacion";
 export default function Aplicacion() {
   const { estado, cargando, enviar, reintentar, nuevaSesion } = useConversacion();
   const salud = useSalud();
-  const mostrarConfirmacion = estado.esperaConfirmacion && !cargando;
+  const { error, entradas } = estado;
+  const mostrarConfirmacion = estado.esperaConfirmacion && !cargando && error === null;
+  const marcadorFin = useDesplazarAlFinal([entradas.length, cargando, mostrarConfirmacion, error]);
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <Encabezado salud={salud.data} alNuevaSesion={nuevaSesion} />
+      <Encabezado
+        estadoSalud={salud.status}
+        modelo={salud.data?.model}
+        deshabilitado={cargando}
+        alNuevaSesion={nuevaSesion}
+      />
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-4">
-        {estado.entradas.length === 0 ? (
+        {entradas.length === 0 ? (
           <EstadoVacio alElegir={enviar} />
         ) : (
-          <ListaMensajes entradas={estado.entradas} />
+          <ListaMensajes entradas={entradas} />
         )}
-        {cargando && <IndicadorPensando />}
-        {estado.error && <AvisoError mensaje={estado.error} alReintentar={reintentar} />}
-        {mostrarConfirmacion && (
-          <BannerConfirmacion
-            deshabilitado={cargando}
-            alConfirmar={() => {
-              enviar(RESPUESTAS_CONFIRMACION.confirmar);
-            }}
-            alCancelar={() => {
-              enviar(RESPUESTAS_CONFIRMACION.cancelar);
-            }}
-          />
-        )}
+        <AvisosConversacion
+          cargando={cargando}
+          error={error}
+          mostrarConfirmacion={mostrarConfirmacion}
+          alReintentar={reintentar}
+          alEnviar={enviar}
+        />
+        <div ref={marcadorFin} aria-hidden="true" />
       </main>
       <PieCompositor
         deshabilitado={cargando}

@@ -6,8 +6,10 @@ import { Compositor } from "./Compositor";
 
 const preparar = (deshabilitado = false) => {
   const alEnviar = vi.fn();
-  render(<Compositor deshabilitado={deshabilitado} textoGuia="Escribe" alEnviar={alEnviar} />);
-  return { alEnviar, campo: screen.getByLabelText("Mensaje para el agente") };
+  const resultado = render(
+    <Compositor deshabilitado={deshabilitado} textoGuia="Escribe" alEnviar={alEnviar} />,
+  );
+  return { alEnviar, resultado, campo: screen.getByLabelText("Mensaje para el agente") };
 };
 
 describe("Compositor", () => {
@@ -29,10 +31,19 @@ describe("Compositor", () => {
     expect(campo).toHaveValue("línea 1\nlínea 2");
   });
 
-  it("se deshabilita mientras el agente trabaja", () => {
+  it("queda en solo lectura mientras el agente trabaja, sin perder el foco", () => {
     const { campo } = preparar(true);
 
-    expect(campo).toBeDisabled();
+    expect(campo).toHaveAttribute("readonly");
+    expect(campo).toHaveAttribute("aria-disabled", "true");
     expect(screen.getByRole("button", { name: "Enviar" })).toBeDisabled();
+  });
+
+  it("devuelve el foco al campo cuando el agente termina", () => {
+    const { resultado, campo } = preparar(true);
+
+    resultado.rerender(<Compositor deshabilitado={false} textoGuia="Escribe" alEnviar={vi.fn()} />);
+
+    expect(campo).toHaveFocus();
   });
 });
