@@ -48,4 +48,23 @@ describe("Encabezado", () => {
 
     expect(alNuevaSesion).toHaveBeenCalledOnce();
   });
+
+  it("«Solicitudes» abre el panel lateral e indica si está abierto", async () => {
+    const alAbrirSolicitudes = vi.fn();
+    render(
+      <Encabezado
+        estadoSalud="success"
+        modelo={MODELO}
+        deshabilitado={false}
+        alNuevaSesion={vi.fn()}
+        alAbrirSolicitudes={alAbrirSolicitudes}
+        solicitudesAbiertas={false}
+      />,
+    );
+    const boton = screen.getByRole("button", { name: TEXTOS_ENCABEZADO.solicitudes });
+
+    expect(boton).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(boton);
+    expect(alAbrirSolicitudes).toHaveBeenCalledOnce();
+  });
 });

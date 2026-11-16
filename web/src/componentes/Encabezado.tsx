@@ -1,7 +1,8 @@
 import type { QueryStatus } from "@tanstack/react-query";
+import type { ComponentType } from "react";
 
 import { CLASES, type Tono, TONOS } from "./clases";
-import { IconoMas } from "./Iconos";
+import { IconoMas, IconoSolicitudes } from "./Iconos";
 import { TEXTOS_ENCABEZADO } from "./textos";
 
 /** Props de {@link Encabezado}. */
@@ -16,7 +17,15 @@ export interface PropiedadesEncabezado {
   readonly alNuevaSesion: () => void;
   /** true si la última respuesta indicó que la clave del modelo falta o no es válida. */
   readonly claveInvalida?: boolean;
+  /** Abre el panel de solicitudes (si no se da, no se muestra el botón). */
+  readonly alAbrirSolicitudes?: () => void;
+  /** true mientras el panel de solicitudes está abierto. */
+  readonly solicitudesAbiertas?: boolean;
 }
+
+/** Botón discreto de la barra: solo ícono en móvil, ícono y texto desde `sm`. */
+const CLASE_BOTON_BARRA =
+  "anillo-foco inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-xl px-2.5 text-sm font-medium text-texto transition-colors hover:bg-elevada disabled:cursor-not-allowed disabled:opacity-50 sm:px-3";
 
 /** Presentación del estado cuando el servidor responde pero la clave del modelo falla. */
 const PRESENTACION_CLAVE_INVALIDA = {
@@ -47,7 +56,7 @@ function EstadoServidor({
     conectado && claveInvalida ? PRESENTACION_CLAVE_INVALIDA : PRESENTACION_SALUD[estadoSalud];
   const detalle = conectado && modelo ? TEXTOS_ENCABEZADO.modelo(modelo) : undefined;
   return (
-    <p title={detalle} className={`${CLASES.ficha} ${TONOS[tono]} ml-auto`}>
+    <p title={detalle} className={`${CLASES.ficha} ${TONOS[tono]}`}>
       <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-current" />
       <span className="sr-only">{TEXTOS_ENCABEZADO.estadoServidor}</span>
       <span className="sr-only sm:not-sr-only">{texto}</span>
@@ -55,10 +64,59 @@ function EstadoServidor({
   );
 }
 
+/** Props de {@link BotonBarra}. */
+interface PropiedadesBotonBarra {
+  readonly texto: string;
+  readonly Icono: ComponentType<{ className?: string }>;
+  readonly alPulsar: () => void;
+  readonly deshabilitado?: boolean;
+  /** Si se da, el botón abre algo y anuncia si está abierto (`aria-expanded`). */
+  readonly expandido?: boolean;
+}
+
 /**
- * Barra superior: marca del producto, estado del servidor (texto, no solo color) y
- * "Nueva conversación" (ícono con nombre accesible en móvil, botón con texto en escritorio).
- * @param props - estado de la salud, modelo y acción de nueva sesión
+ * Botón de la barra con nombre accesible: en móvil solo el ícono, desde `sm` también el texto.
+ * @param props - texto, ícono, acción y estado
+ * @returns el botón
+ */
+function BotonBarra({ texto, Icono, alPulsar, deshabilitado, expandido }: PropiedadesBotonBarra) {
+  return (
+    <button
+      type="button"
+      onClick={alPulsar}
+      disabled={deshabilitado}
+      aria-expanded={expandido}
+      aria-label={texto}
+      className={CLASE_BOTON_BARRA}
+    >
+      <Icono className="size-5" />
+      <span className="hidden sm:inline">{texto}</span>
+    </button>
+  );
+}
+
+/** Sigla y nombre del producto. */
+function Marca() {
+  return (
+    <div className="flex min-w-0 items-center gap-2.5 px-1">
+      <span
+        aria-hidden="true"
+        className="grid size-8 shrink-0 place-items-center rounded-lg bg-marca text-xs font-bold tracking-tight text-sobre-marca"
+      >
+        {TEXTOS_ENCABEZADO.sigla}
+      </span>
+      <h1 className="truncate text-[0.9375rem] font-semibold tracking-tight">
+        {TEXTOS_ENCABEZADO.titulo}
+      </h1>
+    </div>
+  );
+}
+
+/**
+ * Barra superior: "Solicitudes" (abre el panel lateral), marca del producto, estado del
+ * servidor (texto, no solo color) y "Nueva conversación". En móvil los botones son solo
+ * íconos con nombre accesible.
+ * @param props - estado de la salud, modelo y acciones
  * @returns el encabezado de la página
  */
 export function Encabezado({
@@ -67,35 +125,30 @@ export function Encabezado({
   deshabilitado,
   alNuevaSesion,
   claveInvalida = false,
+  alAbrirSolicitudes,
+  solicitudesAbiertas = false,
 }: PropiedadesEncabezado) {
   return (
-    <header className="sticky top-0 z-10 h-(--alto-encabezado) border-b border-borde bg-superficie/90 backdrop-blur supports-[backdrop-filter]:bg-superficie/80">
-      <div className="mx-auto flex h-full max-w-7xl items-center gap-3 px-4 lg:px-6">
-        <span
-          aria-hidden="true"
-          className="grid size-9 shrink-0 place-items-center rounded-xl bg-marca text-sm font-bold tracking-tight text-sobre-marca shadow-suave"
-        >
-          {TEXTOS_ENCABEZADO.sigla}
-        </span>
-        <div className="min-w-0">
-          <h1 className="truncate text-base leading-tight font-semibold tracking-tight">
-            {TEXTOS_ENCABEZADO.titulo}
-          </h1>
-          <p className="hidden truncate text-xs text-texto-suave md:block">
-            {TEXTOS_ENCABEZADO.subtitulo}
-          </p>
+    <header className="sticky top-0 z-20 h-(--alto-encabezado) border-b border-borde/70 bg-fondo/85 backdrop-blur">
+      <div className="flex h-full items-center gap-1 px-2 sm:gap-2 sm:px-4">
+        {alAbrirSolicitudes && (
+          <BotonBarra
+            texto={TEXTOS_ENCABEZADO.solicitudes}
+            Icono={IconoSolicitudes}
+            alPulsar={alAbrirSolicitudes}
+            expandido={solicitudesAbiertas}
+          />
+        )}
+        <Marca />
+        <div className="ml-auto flex items-center gap-1 sm:gap-2">
+          <EstadoServidor estadoSalud={estadoSalud} modelo={modelo} claveInvalida={claveInvalida} />
+          <BotonBarra
+            texto={TEXTOS_ENCABEZADO.nuevaSesion}
+            Icono={IconoMas}
+            alPulsar={alNuevaSesion}
+            deshabilitado={deshabilitado}
+          />
         </div>
-        <EstadoServidor estadoSalud={estadoSalud} modelo={modelo} claveInvalida={claveInvalida} />
-        <button
-          type="button"
-          onClick={alNuevaSesion}
-          disabled={deshabilitado}
-          aria-label={TEXTOS_ENCABEZADO.nuevaSesion}
-          className={`${CLASES.botonIcono} sm:inline-flex sm:w-auto sm:gap-1.5 sm:px-4 sm:text-sm sm:font-medium`}
-        >
-          <IconoMas className="size-5" />
-          <span className="hidden sm:inline">{TEXTOS_ENCABEZADO.nuevaSesion}</span>
-        </button>
       </div>
     </header>
   );

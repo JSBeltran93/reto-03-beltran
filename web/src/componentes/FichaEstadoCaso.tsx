@@ -3,7 +3,7 @@ import type { ComponentType } from "react";
 
 import { CLASES, type Tono, TONOS } from "./clases";
 import { IconoAlerta, IconoBloqueo, IconoPendiente, IconoVerificado } from "./Iconos";
-import { TEXTOS_BANDEJA } from "./textos";
+import { TEXTOS_SOLICITUDES } from "./textos";
 
 /** Ícono, texto y tono de cada estado: el estado nunca depende solo del color. */
 const PRESENTACION_ESTADO: Readonly<
@@ -11,28 +11,28 @@ const PRESENTACION_ESTADO: Readonly<
 > = {
   [ESTADOS_CASO.creada]: {
     Icono: IconoVerificado,
-    texto: TEXTOS_BANDEJA.estados.creada,
+    texto: TEXTOS_SOLICITUDES.estados.creada,
     tono: "exito",
   },
   [ESTADOS_CASO.pendiente]: {
     Icono: IconoAlerta,
-    texto: TEXTOS_BANDEJA.estados.pendiente,
+    texto: TEXTOS_SOLICITUDES.estados.pendiente,
     tono: "aviso",
   },
   [ESTADOS_CASO.bloqueada]: {
     Icono: IconoBloqueo,
-    texto: TEXTOS_BANDEJA.estados.bloqueada,
+    texto: TEXTOS_SOLICITUDES.estados.bloqueada,
     tono: "peligro",
   },
   [ESTADOS_CASO.sinProcesar]: {
     Icono: IconoPendiente,
-    texto: TEXTOS_BANDEJA.estados.sinProcesar,
+    texto: TEXTOS_SOLICITUDES.estados.sinProcesar,
     tono: "neutro",
   },
 };
 
 /**
- * Ficha con el estado de un caso en la bandeja (ícono + texto).
+ * Ficha con el estado de una solicitud (ícono + texto).
  * @param props - estado del caso
  * @returns la ficha
  */
@@ -40,7 +40,7 @@ export function FichaEstadoCaso({ estado }: { readonly estado: EstadoCaso }) {
   const { Icono, texto, tono } = PRESENTACION_ESTADO[estado];
   return (
     <span className={`${CLASES.ficha} ${TONOS[tono]} shrink-0`}>
-      <span className="sr-only">{TEXTOS_BANDEJA.estado}</span>
+      <span className="sr-only">{TEXTOS_SOLICITUDES.estado}</span>
       <Icono className="size-3.5" />
       {texto}
     </span>
