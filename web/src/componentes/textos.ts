@@ -180,7 +180,7 @@ export const TEXTOS_ORDEN = {
     condiciones: "Condiciones de pago",
     aprobador: "Aprobador",
     total: "Total",
-    excepciones: "Excepciones confirmadas",
+    excepciones: "Excepciones",
   },
   sinExcepciones: "Ninguna",
   creada: (numero: string): string => `Listo: OC ${numero} creada en SAP`,
