@@ -1,3 +1,4 @@
+import "./configurar-zod";
 import "./estilos.css";
 
 import { QueryClientProvider } from "@tanstack/react-query";
