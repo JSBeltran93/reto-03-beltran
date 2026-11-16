@@ -153,7 +153,7 @@ describe("TurnoAsistente", () => {
         respuesta={null}
       />,
     );
-    const documento = screen.getByRole("article", { name: TEXTOS_ORDEN.titulo });
+    const documento = screen.getByRole("article", { name: TEXTOS_ORDEN.tituloCreada });
 
     expect(within(documento).getByText(/Cloud Andina S.A.S./)).toBeInTheDocument();
     expect(within(documento).getByText(/SOL-2026-004/)).toBeInTheDocument();

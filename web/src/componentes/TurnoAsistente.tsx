@@ -105,7 +105,7 @@ export function TurnoAsistente({ llamadas, respuesta, alReintentar }: Propiedade
     <FilaAsistente etiqueta={TEXTOS_ESTADO.agente}>
       {llamadas.length > 0 && <Actividad llamadas={llamadas} />}
       <Respuesta respuesta={respuesta} alReintentar={alReintentar} />
-      {orden && <DocumentoOrden datos={orden} />}
+      {orden && <DocumentoOrden datos={orden} creada={Boolean(creacion)} />}
       {creacion && <TarjetaOrdenCreada datos={creacion} />}
     </FilaAsistente>
   );
