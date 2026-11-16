@@ -1,6 +1,6 @@
 /**
- * Mensaje constante que envía "Revisar solicitud" para un caso (el del PRD §11): pide la OC
- * como quedaría en SAP, las validaciones y no crearla sin confirmación.
+ * Mensaje con el que se procesa un caso (el del PRD §11): pide la OC como quedaría en SAP,
+ * las validaciones y no crearla sin confirmación.
  * @param caso - carpeta del caso
  * @returns el mensaje para el agente
  */
@@ -26,7 +26,6 @@ export const TEXTOS_COMPOSITOR = {
 /** Textos del encabezado. */
 export const TEXTOS_ENCABEZADO = {
   titulo: "Órdenes de compra",
-  subtitulo: "Revisa solicitudes y crea OC en SAP sin salir de aquí",
   sigla: "OC",
   nuevaSesion: "Nueva conversación",
   enLinea: "Conectado",
@@ -35,34 +34,55 @@ export const TEXTOS_ENCABEZADO = {
   sinServidor: "Sin conexión",
   estadoServidor: "Estado del asistente: ",
   claveInvalida: "Asistente sin acceso",
+  solicitudes: "Solicitudes",
 } as const;
 
-/** Textos del estado vacío del panel de conversación. */
+/** Textos del estado vacío de la conversación. */
 export const TEXTOS_ESTADO_VACIO = {
-  titulo: "Elige una solicitud para empezar",
+  titulo: "¿Qué solicitud revisamos hoy?",
   descripcion:
     "Yo reviso los documentos y los datos maestros; tú decides. Nada llega a SAP sin tu confirmación.",
-  pasos: [
-    "Leo el correo, la solicitud, la cotización y la aprobación",
-    "Reviso proveedor, aprobador, topes, IVA y fechas",
-    "Creo la OC en SAP cuando tú me lo confirmes",
-  ],
+  sugerencias: "Prueba con",
+  verTodas: "Ver todas las solicitudes",
 } as const;
 
-/** Textos de la bandeja de solicitudes y de la cabecera del caso. */
-export const TEXTOS_BANDEJA = {
+/**
+ * Sugerencias del estado vacío: mensajes reales para la analista. La primera es el
+ * mensaje de la demo del PRD §11.
+ */
+export const SUGERENCIAS = [
+  {
+    caso: "sol-004",
+    etiqueta: "Procesa la solicitud sol-004",
+    mensaje: mensajeProcesar("sol-004"),
+  },
+  {
+    caso: "sol-002",
+    etiqueta: "¿Por qué no se puede crear la OC de sol-002?",
+    mensaje: "¿Por qué no se puede crear la OC de sol-002?",
+  },
+  {
+    caso: "sol-001",
+    etiqueta: "Procesa sol-001 y créala si es apta",
+    mensaje: "Procesa sol-001 y créala si es apta.",
+  },
+  {
+    caso: "sol-005",
+    etiqueta: "¿La factura de sol-005 es anterior a la solicitud?",
+    mensaje: "Revisa sol-005: ¿la factura es anterior a la solicitud? ¿Qué implica para la OC?",
+  },
+] as const;
+
+/** Textos del panel de solicitudes. */
+export const TEXTOS_SOLICITUDES = {
   titulo: "Solicitudes",
-  region: "Solicitudes de compra",
+  ayuda: "Elige una para revisarla conmigo. Si ya hablamos de ella, vuelves a esa conversación.",
   conteo: (total: number): string => (total === 1 ? "1 solicitud" : `${total} solicitudes`),
   cargando: "Cargando tus solicitudes…",
   error: "No pude cargar las solicitudes. Reintenta en unos segundos.",
   reintentar: "Reintentar",
-  abrirConversacion: "Ir al chat",
-  ayudaSinBandeja: "Mientras tanto, puedes escribirme en el chat.",
   vacia: "No tienes solicitudes por revisar. ¡Todo al día!",
-  volver: "Solicitudes",
-  procesar: "Revisar solicitud",
-  ayudaProcesar: "Te muestro la OC y lo que encontré. No creo nada en SAP sin tu confirmación.",
+  cerrar: "Cerrar solicitudes",
   estado: "Estado: ",
   estados: {
     creada: "Creada",
@@ -70,8 +90,6 @@ export const TEXTOS_BANDEJA = {
     bloqueada: "Bloqueada",
     sinProcesar: "Por revisar",
   },
-  numeroOc: (numero: string): string => `OC ${numero}`,
-  centro: "Centro de costo",
 } as const;
 
 /** Textos de la tarjeta de confirmación. */
@@ -88,20 +106,17 @@ export const TEXTOS_CONFIRMACION = {
 export const TEXTOS_HERRAMIENTA = {
   correcta: "Hecho: ",
   conError: "No se pudo: ",
-  argumentos: "Datos enviados",
+  argumentos: "Argumentos",
   datos: "Respuesta completa",
-  detalles: "Ver detalle",
+  detalles: "Ver JSON",
   pasos: "Lo que hice",
-  validacion: "Resultado de la revisión",
+  conteo: (total: number): string => (total === 1 ? "1 herramienta" : `${total} herramientas`),
+  sinArgumentos: "sin argumentos",
+  resultado: "Resultado: ",
 } as const;
 
 /** Textos del resultado de la validación. */
 export const TEXTOS_VALIDACION = {
-  apta: "Todo en orden para crear la OC",
-  noApta: "Esta OC todavía no se puede crear",
-  retroactiva:
-    "Ojo: la factura es anterior a la solicitud, así que la OC quedará marcada como retroactiva.",
-  controles: "Lo que encontré",
   tipos: {
     bloqueo: "Impide crear la OC",
     confirmacion: "Necesita tu confirmación",

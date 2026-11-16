@@ -1,106 +1,105 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 
 import { mensajeProcesar } from "../componentes/textos";
-import { type Navegacion, useNavegacion } from "./navegacion";
 import { casosDeHistorial } from "./resultados";
-import {
-  casoDeSesion,
-  leerSesionesPorCaso,
-  nuevoIdSesion,
-  recordarSesionDeCaso,
-  type SesionesPorCaso,
-} from "./sesion-guardada";
+import { leerSesionesPorCaso, recordarSesionDeCaso, type SesionesPorCaso } from "./sesion-guardada";
 import type { Conversacion } from "./useConversacion";
 
-/** Lo que importa de la sesión abierta para decidir la sesión de un caso. */
+/** Lo que importa de la conversación abierta para decidir dónde se trata un caso. */
 export interface SesionAbierta {
   readonly sessionId: string;
   /** true si la conversación no tiene mensajes. */
   readonly vacia: boolean;
-  /** Caso cuya OC espera confirmación en esta sesión (null si no hay). */
-  readonly casoPendiente: string | null;
-  /** Casos sobre los que el agente ya trabajó en esta sesión. */
+  /** Casos sobre los que el agente ya trabajó en esta conversación. */
   readonly casos: readonly string[];
 }
 
+/** Qué hacer al elegir una solicitud en el panel "Solicitudes". */
+export type Apertura =
+  /** La conversación abierta ya trata el caso: se queda en ella. */
+  | { readonly tipo: "seguir" }
+  /** El caso tiene otra conversación recordada: se vuelve a ella (con su historial). */
+  | { readonly tipo: "volver"; readonly sessionId: string }
+  /** La conversación abierta está vacía: se procesa el caso en ella. */
+  | { readonly tipo: "procesarAqui" }
+  /** Se procesa el caso en una conversación nueva (PRD §11: "sesión nueva"). */
+  | { readonly tipo: "procesarEnNueva" };
+
 /**
- * Elige la sesión de un caso: cada caso tiene su propia conversación (PRD §11: "sesión
- * nueva" por caso). Una sesión abierta que no es de ningún caso se adopta si espera la
- * confirmación de ese caso (no se pierde de vista), si ya trató ese caso (se ve su
- * historial) o si está vacía.
+ * Decide dónde se trata un caso elegido en "Solicitudes", sin mezclar casos en una misma
+ * conversación salvo que la analista lo haya hecho escribiendo.
  * @param caso - caso elegido
- * @param abierta - sesión abierta ahora
- * @param mapa - sesiones recordadas por caso
- * @returns el identificador de la sesión del caso (recordada, adoptada o nueva)
+ * @param abierta - conversación abierta ahora
+ * @param mapa - última conversación recordada de cada caso
+ * @returns la apertura
  */
-export function sesionParaCaso(
+export function aperturaDeCaso(
   caso: string,
   abierta: SesionAbierta,
   mapa: SesionesPorCaso,
-): string {
-  const libre = casoDeSesion(abierta.sessionId, mapa) === null;
-  if (libre && abierta.casoPendiente === caso) return abierta.sessionId;
+): Apertura {
+  if (abierta.casos.includes(caso)) return { tipo: "seguir" };
   const recordada = mapa[caso];
-  if (recordada !== undefined) return recordada;
-  const propia = abierta.vacia || abierta.casos.includes(caso);
-  return libre && propia ? abierta.sessionId : nuevoIdSesion();
+  if (recordada !== undefined && recordada !== abierta.sessionId) {
+    return { tipo: "volver", sessionId: recordada };
+  }
+  if (abierta.vacia) return { tipo: "procesarAqui" };
+  return recordada === abierta.sessionId ? { tipo: "seguir" } : { tipo: "procesarEnNueva" };
 }
 
-/** Navegación con una conversación por caso y las acciones que dependen del caso. */
-export interface SesionesPorCasoApi extends Navegacion {
-  /** Caso abierto: el seleccionado o, si no hay, el que espera confirmación. */
-  readonly casoActivo: string | null;
-  /** Envía el mensaje del PRD §11 para el caso en su propia sesión. */
-  readonly procesar: (caso: string) => void;
-  /** Inicia una sesión nueva; si hay un caso seleccionado, pasa a ser la de ese caso. */
-  readonly nuevaSesion: () => void;
+/** Acciones que unen las solicitudes con las conversaciones. */
+export interface SesionesPorCasoApi {
+  /** Abre la conversación de un caso o empieza una con el mensaje del PRD §11. */
+  readonly abrirCaso: (caso: string) => void;
+  /** Envía un mensaje sobre un caso en la conversación abierta y la recuerda para ese caso. */
+  readonly enviarSobreCaso: (caso: string, texto: string) => void;
 }
 
 /**
- * Une la navegación de la bandeja con la conversación: al elegir un caso se abre su
- * sesión (y su historial); así nunca se mezclan casos en una misma conversación. Mientras
- * el agente trabaja no se cambia de caso. Al recargar se vuelve a seleccionar el caso de
- * la sesión restaurada.
+ * Une las solicitudes con la conversación: cada caso recuerda su última conversación
+ * para volver a ella desde "Solicitudes".
  * @param conversacion - conversación con el agente
- * @returns navegación, caso activo y acciones
+ * @returns las acciones
  */
 export function useSesionesPorCaso(conversacion: Conversacion): SesionesPorCasoApi {
-  const { estado, abrirSesion, enviar, nuevaSesion: nuevaSesionConversacion } = conversacion;
-  const [inicial] = useState(() => casoDeSesion(estado.sessionId));
-  const navegacion = useNavegacion(inicial);
-  const { seleccionado, seleccionar: mostrarCaso } = navegacion;
+  const { estado, abrirSesion, enviar, nuevaSesion } = conversacion;
+  const { sessionId, entradas } = estado;
 
-  const seleccionar = useCallback(
+  const abrirCaso = useCallback(
     (caso: string) => {
       const abierta = {
-        sessionId: estado.sessionId,
-        vacia: estado.entradas.length === 0,
-        casoPendiente: estado.casoPendiente,
-        casos: casosDeHistorial(estado.entradas),
+        sessionId,
+        vacia: entradas.length === 0,
+        casos: casosDeHistorial(entradas),
       };
-      const mapa = leerSesionesPorCaso();
-      const id = sesionParaCaso(caso, abierta, mapa);
-      const nueva = !Object.values(mapa).includes(id);
-      if (id !== estado.sessionId && !abrirSesion(id, { nueva })) return;
-      recordarSesionDeCaso(caso, id);
-      mostrarCaso(caso);
+      const apertura = aperturaDeCaso(caso, abierta, leerSesionesPorCaso());
+      switch (apertura.tipo) {
+        case "seguir":
+          recordarSesionDeCaso(caso, sessionId);
+          return;
+        case "volver":
+          abrirSesion(apertura.sessionId);
+          return;
+        case "procesarAqui":
+          recordarSesionDeCaso(caso, sessionId);
+          enviar(mensajeProcesar(caso));
+          return;
+        case "procesarEnNueva": {
+          const id = nuevaSesion(mensajeProcesar(caso));
+          if (id !== null) recordarSesionDeCaso(caso, id);
+        }
+      }
     },
-    [estado.sessionId, estado.entradas, estado.casoPendiente, abrirSesion, mostrarCaso],
+    [sessionId, entradas, abrirSesion, enviar, nuevaSesion],
   );
 
-  const procesar = useCallback(
-    (caso: string) => {
-      if (casoDeSesion(estado.sessionId) === null) recordarSesionDeCaso(caso, estado.sessionId);
-      enviar(mensajeProcesar(caso));
+  const enviarSobreCaso = useCallback(
+    (caso: string, texto: string) => {
+      recordarSesionDeCaso(caso, sessionId);
+      enviar(texto);
     },
-    [estado.sessionId, enviar],
+    [sessionId, enviar],
   );
 
-  const nuevaSesion = useCallback(() => {
-    const id = nuevaSesionConversacion();
-    if (id !== null && seleccionado !== null) recordarSesionDeCaso(seleccionado, id);
-  }, [nuevaSesionConversacion, seleccionado]);
-
-  const casoActivo = seleccionado ?? estado.casoPendiente;
-  return { ...navegacion, seleccionar, casoActivo, procesar, nuevaSesion };
+  return { abrirCaso, enviarSobreCaso };
 }
