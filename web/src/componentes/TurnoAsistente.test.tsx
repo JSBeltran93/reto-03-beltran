@@ -3,8 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { PasoHerramienta } from "./PasoHerramienta";
-import { PasosTurno } from "./PasosTurno";
-import { TEXTOS_HERRAMIENTA, TEXTOS_ORDEN, TEXTOS_VALIDACION } from "./textos";
+import { TEXTOS_HERRAMIENTA, TEXTOS_ORDEN } from "./textos";
+import { TurnoAsistente } from "./TurnoAsistente";
 
 const validacion = {
   apta: true,
@@ -51,74 +51,90 @@ const llamadaPayload = (orden: object) => ({
 });
 
 describe("PasoHerramienta", () => {
-  it("muestra el paso en lenguaje natural y su resumen; el detalle trae herramienta, caso y argumentos", async () => {
+  it("muestra siempre la etiqueta, el nombre técnico, los argumentos y el resultado resumido", () => {
     const llamada = {
       nombre: "oc_validar",
-      args: { caso: "sol-004" },
+      args: {
+        caso: "sol-004",
+        paquete: { correo: {}, solicitud: {}, cotizacion: {}, factura: null },
+      },
       ok: true,
       resumen: "apta · confirmaciones: RC5",
     };
     render(<PasoHerramienta llamada={llamada} />);
     const paso = screen.getByRole("group", { name: "Validé contra los maestros" });
 
-    expect(within(paso).getByText("Validé contra los maestros")).toBeVisible();
-    expect(within(paso).getByText("apta · confirmaciones: RC5")).toBeVisible();
     expect(within(paso).getByText(TEXTOS_HERRAMIENTA.correcta.trim())).toBeInTheDocument();
-    expect(within(paso).getByText("oc_validar · sol-004")).toBeInTheDocument();
-
-    await userEvent.click(within(paso).getByText(TEXTOS_HERRAMIENTA.detalles));
-
-    expect(within(paso).getByText(/"caso": "sol-004"/)).toBeVisible();
-    expect(within(paso).queryByText(TEXTOS_HERRAMIENTA.datos)).not.toBeInTheDocument();
+    expect(within(paso).getByText("oc_validar")).toBeVisible();
+    expect(paso).toHaveTextContent(
+      'oc_validar( Argumentos: caso: "sol-004", paquete: {correo, solicitud, cotizacion, +1})',
+    );
+    expect(within(paso).getByText("apta · confirmaciones: RC5", { exact: false })).toBeVisible();
   });
 
-  it("muestra en el detalle técnico el JSON completo de los datos", async () => {
+  it("deja el JSON completo de argumentos y respuesta en «Ver JSON»", async () => {
     render(
       <PasoHerramienta
-        llamada={{ nombre: "oc_validar", args: {}, ok: true, resumen: "apta", datos: validacion }}
+        llamada={{
+          nombre: "oc_validar",
+          args: { caso: "sol-004" },
+          ok: true,
+          resumen: "apta",
+          datos: validacion,
+        }}
       />,
     );
+    expect(screen.queryByText(/"cotizacion": 26500000/)).not.toBeVisible();
 
     await userEvent.click(screen.getByText(TEXTOS_HERRAMIENTA.detalles));
 
     expect(screen.getByText(TEXTOS_HERRAMIENTA.datos)).toBeVisible();
+    expect(screen.getByText(/"caso": "sol-004"/)).toBeVisible();
     expect(screen.getByText(/"cotizacion": 26500000/)).toBeVisible();
   });
 
-  it("marca las llamadas con error", () => {
+  it("marca las llamadas con error y dice cuando no hay argumentos", () => {
     render(
       <PasoHerramienta llamada={{ nombre: "oc_crear", args: {}, ok: false, resumen: "NO_APTA" }} />,
     );
+    const paso = screen.getByRole("group", { name: "Creé la OC en SAP" });
 
-    expect(screen.getByRole("group", { name: "Creé la OC en SAP" })).toHaveTextContent(
-      TEXTOS_HERRAMIENTA.conError.trim(),
-    );
+    expect(paso).toHaveTextContent(TEXTOS_HERRAMIENTA.conError.trim());
+    expect(paso).toHaveTextContent(TEXTOS_HERRAMIENTA.sinArgumentos);
   });
 });
 
-describe("PasosTurno", () => {
-  it("lista todos los pasos y dibuja los controles de la validación con texto accesible", () => {
+describe("TurnoAsistente", () => {
+  it("muestra la actividad con todas las llamadas y después la respuesta en Markdown", () => {
     render(
-      <PasosTurno
+      <TurnoAsistente
         llamadas={[
           { nombre: "oc_leer_paquete", args: { caso: "sol-004" }, ok: true, resumen: "leído" },
           { nombre: "oc_validar", args: {}, ok: true, resumen: "apta", datos: validacion },
         ]}
+        respuesta={{ tipo: "asistente", texto: "| Campo | Valor |\n| --- | --- |\n| Total | 25 |" }}
       />,
     );
-    const pasos = screen.getByRole("region", { name: TEXTOS_HERRAMIENTA.pasos });
-    const controles = screen.getByRole("list", { name: TEXTOS_VALIDACION.controles });
+    const actividad = screen.getByRole("region", { name: TEXTOS_HERRAMIENTA.pasos });
 
-    expect(within(pasos).getAllByRole("listitem")).toHaveLength(2);
-    expect(within(pasos).getByRole("group", { name: "Leí los documentos" })).toBeInTheDocument();
-    expect(screen.getByText(TEXTOS_VALIDACION.apta)).toBeInTheDocument();
-    expect(within(controles).getByText(/La cotización \(26\.500\.000\) difiere 6 %/)).toBeVisible();
-    expect(within(controles).getByText(TEXTOS_VALIDACION.tipos.confirmacion)).toBeInTheDocument();
-    expect(within(controles).getByText("RC5")).toBeInTheDocument();
-    expect(within(controles).getByText("Cotización")).toBeInTheDocument();
-    expect(within(controles).getByText(/^COP\s26\.500\.000$/)).toBeInTheDocument();
-    expect(within(controles).getByText("Diferencia")).toBeInTheDocument();
-    expect(within(controles).getByText("6 %")).toBeInTheDocument();
+    expect(within(actividad).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(actividad).getByText(TEXTOS_HERRAMIENTA.conteo(2))).toBeInTheDocument();
+    expect(
+      within(actividad).getByRole("group", { name: "Leí los documentos" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Campo" })).toBeInTheDocument();
+  });
+
+  it("si el agente reintentó una herramienta, dibuja solo la última OC propuesta", () => {
+    render(
+      <TurnoAsistente
+        llamadas={[llamadaPayload(ordenBase), llamadaPayload({ ...ordenBase, moneda: "USD" })]}
+        respuesta={null}
+      />,
+    );
+
+    expect(screen.getAllByRole("article", { name: TEXTOS_ORDEN.titulo })).toHaveLength(1);
+    expect(screen.getByText("USD")).toBeInTheDocument();
   });
 
   it("muestra la OC como documento y la creación como tarjeta de éxito", () => {
@@ -129,11 +145,12 @@ describe("PasosTurno", () => {
       ruta_evidencia: "out/sol-004/aprobacion.txt",
     };
     render(
-      <PasosTurno
+      <TurnoAsistente
         llamadas={[
           llamadaPayload(ordenBase),
           { nombre: "oc_crear", args: {}, ok: true, resumen: "OC 4500000002", datos: creada },
         ]}
+        respuesta={null}
       />,
     );
     const documento = screen.getByRole("article", { name: TEXTOS_ORDEN.titulo });
@@ -158,7 +175,7 @@ describe("PasosTurno", () => {
         { codigo: "RC6", detalle: "Cotización vencida confirmada" },
       ],
     };
-    render(<PasosTurno llamadas={[llamadaPayload(orden)]} />);
+    render(<TurnoAsistente llamadas={[llamadaPayload(orden)]} respuesta={null} />);
     const documento = screen.getByRole("article", { name: TEXTOS_ORDEN.titulo });
     const excepciones = within(documento).getByRole("list", {
       name: TEXTOS_ORDEN.campos.excepciones,

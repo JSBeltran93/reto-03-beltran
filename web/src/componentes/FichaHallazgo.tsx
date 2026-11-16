@@ -1,9 +1,9 @@
 import type { ComponentType } from "react";
 
-import type { DatosValidacion, Hallazgo } from "../estado/resultados";
+import type { Hallazgo } from "../estado/resultados";
 import { CLASES, type Tono, TONOS } from "./clases";
 import { formatearValorHallazgo } from "./formato";
-import { IconoAlerta, IconoBloqueo, IconoInfo, IconoVerificado } from "./Iconos";
+import { IconoAlerta, IconoBloqueo, IconoInfo } from "./Iconos";
 import { etiquetaValor, TEXTOS_VALIDACION } from "./textos";
 
 /** Ícono y tono de cada tipo de hallazgo; el tipo también se dice con texto. */
@@ -69,37 +69,5 @@ export function FichaHallazgo({ hallazgo }: { readonly hallazgo: Hallazgo }) {
         )}
       </div>
     </li>
-  );
-}
-
-/**
- * Resultado de `oc_validar`: veredicto (apta o no), aviso de OC retroactiva y una
- * ficha por bloqueo, confirmación o valor completado.
- * @param props - datos de la validación
- * @returns el resultado
- */
-export function ResultadoValidacion({ datos }: { readonly datos: DatosValidacion }) {
-  const hallazgos = [...datos.bloqueos, ...datos.confirmaciones, ...(datos.informativos ?? [])];
-  const Veredicto = datos.apta ? IconoVerificado : IconoBloqueo;
-  return (
-    <div className="space-y-3">
-      <p className={`${CLASES.ficha} ${TONOS[datos.apta ? "exito" : "peligro"]} text-sm`}>
-        <Veredicto className="size-4" />
-        {datos.apta ? TEXTOS_VALIDACION.apta : TEXTOS_VALIDACION.noApta}
-      </p>
-      {datos.retroactiva && (
-        <p className={`flex gap-2 rounded-xl px-3 py-2.5 text-sm leading-6 ${TONOS.aviso}`}>
-          <IconoAlerta className="mt-1 size-4" />
-          {TEXTOS_VALIDACION.retroactiva}
-        </p>
-      )}
-      {hallazgos.length > 0 && (
-        <ul aria-label={TEXTOS_VALIDACION.controles} className="space-y-2">
-          {hallazgos.map((hallazgo) => (
-            <FichaHallazgo key={`${hallazgo.regla}-${hallazgo.tipo}`} hallazgo={hallazgo} />
-          ))}
-        </ul>
-      )}
-    </div>
   );
 }

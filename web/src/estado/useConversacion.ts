@@ -34,10 +34,11 @@ export interface Conversacion {
   /** Reenvía el último mensaje después de un error reintentable. */
   readonly reintentar: () => void;
   /**
-   * Inicia una conversación nueva con otra sesión (no disponible mientras carga).
+   * Inicia una conversación nueva con otra sesión (no disponible mientras carga) y, si se
+   * da un texto, lo envía como primer mensaje de esa sesión.
    * @returns el identificador de la sesión nueva, o null si no se pudo cambiar
    */
-  readonly nuevaSesion: () => string | null;
+  readonly nuevaSesion: (primerMensaje?: string) => string | null;
   /**
    * Cambia a una sesión existente o nueva y rehidrata su historial desde el servidor
    * (no disponible mientras carga). Una sesión nueva no se pide al servidor.
@@ -135,21 +136,17 @@ export async function manejarFallo(error: unknown, contexto: ContextoFallo): Pro
 }
 
 /**
- * Envía un texto al agente y despacha la respuesta o el error al reducer, marcando la sesión.
+ * Envía un texto al agente y despacha la respuesta o el error al reducer, marcando la sesión
+ * a la que se envió (las respuestas de otra sesión se ignoran).
  * @param despachar - despachador del reducer
- * @param sessionId - sesión actual
  * @param refrescar - vuelve a leer el historial de la sesión en el servidor
  * @returns función para solicitar, si hay una petición o un sondeo en curso y cómo descartarla
  */
-function useSolicitud(
-  despachar: Dispatch<AccionConversacion>,
-  sessionId: string,
-  refrescar: RefrescarSesion,
-) {
+function useSolicitud(despachar: Dispatch<AccionConversacion>, refrescar: RefrescarSesion) {
   const { mutate, isPending, reset } = useEnviarMensaje();
   const [sondeando, setSondeando] = useState(false);
   const solicitar = useCallback(
-    (texto: string) => {
+    (sessionId: string, texto: string) => {
       mutate(
         { sessionId, message: texto },
         {
@@ -165,7 +162,7 @@ function useSolicitud(
         },
       );
     },
-    [mutate, despachar, sessionId, refrescar],
+    [mutate, despachar, refrescar],
   );
   return { solicitar, cargando: isPending || sondeando, descartar: reset };
 }
@@ -219,6 +216,31 @@ function useAbrirSesion(
 }
 
 /**
+ * Envío a una sesión concreta: la abierta o una recién abierta en el mismo clic (cuyo
+ * identificador aún no está en el estado). Un mensaje inválido se muestra como error.
+ * @param despachar - despachador del reducer
+ * @param solicitar - envía el texto al servidor para una sesión
+ * @returns función que envía un texto a una sesión
+ */
+function useEnviarA(
+  despachar: Dispatch<AccionConversacion>,
+  solicitar: (sessionId: string, texto: string) => void,
+): (sessionId: string, texto: string) => void {
+  return useCallback(
+    (sessionId: string, texto: string) => {
+      if (!EsquemaSolicitudChat.shape.message.safeParse(texto).success) {
+        const error = { mensaje: MENSAJES_ERROR_API.mensajeInvalido, reintentable: false };
+        despachar({ tipo: "FALLO", sessionId, error });
+        return;
+      }
+      despachar({ tipo: "ENVIAR", texto });
+      solicitar(sessionId, texto);
+    },
+    [despachar, solicitar],
+  );
+}
+
+/**
  * Estado y acciones de la conversación con el agente: combina el reducer puro, la
  * mutación y la consulta del historial de TanStack Query y la sesión guardada.
  * @returns estado y acciones
@@ -231,33 +253,32 @@ export function useConversacion(): Conversacion {
     return estadoInicial(id);
   });
   const refrescar = useHidratacion(estado, despachar);
-  const { solicitar, cargando, descartar } = useSolicitud(despachar, estado.sessionId, refrescar);
+  const { solicitar, cargando, descartar } = useSolicitud(despachar, refrescar);
 
+  const enviarA = useEnviarA(despachar, solicitar);
   const enviar = useCallback(
     (texto: string) => {
-      if (cargando) return;
-      if (!EsquemaSolicitudChat.shape.message.safeParse(texto).success) {
-        const error = { mensaje: MENSAJES_ERROR_API.mensajeInvalido, reintentable: false };
-        despachar({ tipo: "FALLO", sessionId: estado.sessionId, error });
-        return;
-      }
-      despachar({ tipo: "ENVIAR", texto });
-      solicitar(texto);
+      if (!cargando) enviarA(estado.sessionId, texto);
     },
-    [cargando, solicitar, estado.sessionId],
+    [cargando, enviarA, estado.sessionId],
   );
 
   const reintentar = useCallback(() => {
     if (cargando || estado.ultimoMensaje === null) return;
     despachar({ tipo: "REINTENTAR" });
-    solicitar(estado.ultimoMensaje);
-  }, [cargando, solicitar, estado.ultimoMensaje]);
+    solicitar(estado.sessionId, estado.ultimoMensaje);
+  }, [cargando, solicitar, estado.sessionId, estado.ultimoMensaje]);
 
   const abrirSesion = useAbrirSesion(cargando, descartar, despachar);
-  const nuevaSesion = useCallback(() => {
-    const id = nuevoIdSesion();
-    return abrirSesion(id, { nueva: true }) ? id : null;
-  }, [abrirSesion]);
+  const nuevaSesion = useCallback(
+    (primerMensaje?: string) => {
+      const id = nuevoIdSesion();
+      if (!abrirSesion(id, { nueva: true })) return null;
+      if (primerMensaje !== undefined) enviarA(id, primerMensaje);
+      return id;
+    },
+    [abrirSesion, enviarA],
+  );
 
   return { estado, cargando, enviar, reintentar, nuevaSesion, abrirSesion };
 }

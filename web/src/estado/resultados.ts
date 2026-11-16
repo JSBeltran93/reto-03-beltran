@@ -116,6 +116,30 @@ export function resultadoRico(llamada: VistaLlamada): ResultadoRico | null {
   }
 }
 
+/** Resultados de negocio de un turno que se dibujan bajo la respuesta del asistente. */
+export interface ResultadosTurno {
+  /** Última OC propuesta del turno (`oc_construir_payload`), si la hubo. */
+  readonly orden: DatosPayload | null;
+  /** Última creación del turno (`oc_crear`), si la hubo. */
+  readonly creacion: DatosCreacion | null;
+}
+
+/**
+ * Resultados de negocio de un turno: la última OC propuesta y la última creación. Si el
+ * agente reintentó una herramienta, solo cuenta el último resultado correcto.
+ * @param llamadas - llamadas del turno
+ * @returns la OC y la creación (null si no hubo)
+ */
+export function resultadosDelTurno(llamadas: readonly VistaLlamada[]): ResultadosTurno {
+  const ricos = llamadas.map(resultadoRico);
+  const orden = ricos.findLast((r) => r?.tipo === "payload");
+  const creacion = ricos.findLast((r) => r?.tipo === "creacion");
+  return {
+    orden: orden?.tipo === "payload" ? orden.datos : null,
+    creacion: creacion?.tipo === "creacion" ? creacion.datos : null,
+  };
+}
+
 const EsquemaArgsCaso = z.object({ caso: z.string() });
 
 /**
