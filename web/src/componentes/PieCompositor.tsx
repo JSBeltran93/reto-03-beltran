@@ -26,15 +26,15 @@ export function PieCompositor({
     ? TEXTOS_COMPOSITOR.esperandoConfirmacion
     : TEXTOS_COMPOSITOR.normal;
   return (
-    <footer className="sticky bottom-0 -mx-4 border-t border-borde bg-fondo/95 px-4 backdrop-blur lg:mx-0 lg:px-0">
-      <div className="mx-auto max-w-3xl pt-3 pb-4">
+    <footer className="sticky bottom-0 z-10 bg-linear-to-t from-fondo from-70% to-transparent px-4 pt-6">
+      <div className="mx-auto w-full max-w-(--ancho-chat) pb-3">
         <Compositor
           deshabilitado={deshabilitado}
           textoGuia={textoGuia}
           idAyuda={ID_AYUDA}
           alEnviar={alEnviar}
         />
-        <p id={ID_AYUDA} className="mt-2 text-xs text-texto-suave">
+        <p id={ID_AYUDA} className="mt-2 text-center text-xs text-texto-suave">
           {TEXTOS_COMPOSITOR.ayuda}
         </p>
       </div>

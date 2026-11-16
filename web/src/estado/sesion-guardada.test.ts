@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
-  casoDeSesion,
   CLAVE_SESIONES_POR_CASO,
   leerSesionesPorCaso,
   recordarSesionDeCaso,
@@ -15,12 +14,11 @@ afterEach(() => {
 });
 
 describe("sesiones por caso", () => {
-  it("recuerda la sesión de cada caso y encuentra el caso de una sesión", () => {
+  it("recuerda la sesión de cada caso", () => {
     recordarSesionDeCaso("sol-004", SESION_A);
     recordarSesionDeCaso("sol-001", SESION_B);
 
     expect(leerSesionesPorCaso()).toEqual({ "sol-004": SESION_A, "sol-001": SESION_B });
-    expect(casoDeSesion(SESION_B)).toBe("sol-001");
   });
 
   it("reemplaza la sesión de un caso (p. ej. tras «Nueva sesión»)", () => {
@@ -28,7 +26,6 @@ describe("sesiones por caso", () => {
     recordarSesionDeCaso("sol-004", SESION_B);
 
     expect(leerSesionesPorCaso()).toEqual({ "sol-004": SESION_B });
-    expect(casoDeSesion(SESION_A)).toBeNull();
   });
 
   it.each([

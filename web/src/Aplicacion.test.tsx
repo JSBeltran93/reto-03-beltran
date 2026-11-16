@@ -1,5 +1,5 @@
 import type { RespuestaChat } from "@contratos/contratos-api";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -10,9 +10,11 @@ import { obtenerSalud } from "./api/salud";
 import Aplicacion from "./Aplicacion";
 import {
   mensajeProcesar,
-  TEXTOS_BANDEJA,
+  SUGERENCIAS,
   TEXTOS_ENCABEZADO,
   TEXTOS_ESTADO,
+  TEXTOS_ESTADO_VACIO,
+  TEXTOS_SOLICITUDES,
 } from "./componentes/textos";
 import { MENSAJE_CLAVE_INVALIDA } from "./estado/conversacion";
 import { CLAVE_SESION, CLAVE_SESIONES_POR_CASO } from "./estado/sesion-guardada";
@@ -67,6 +69,13 @@ const errorServidor = (): ErrorApi =>
 
 const escribir = async (texto: string): Promise<void> => {
   await userEvent.type(screen.getByLabelText("Mensaje para el asistente"), `${texto}{Enter}`);
+};
+
+/** Abre "Solicitudes" y elige la fila cuyo nombre coincide. */
+const elegirSolicitud = async (fila: RegExp): Promise<void> => {
+  await userEvent.click(screen.getByRole("button", { name: TEXTOS_ENCABEZADO.solicitudes }));
+  const panel = await screen.findByRole("dialog", { name: /Solicitudes/ });
+  await userEvent.click(await within(panel).findByRole("button", { name: fila }));
 };
 
 beforeEach(() => {
@@ -211,45 +220,6 @@ describe("Aplicacion", () => {
     expect(obtenerSesion).not.toHaveBeenCalled();
   });
 
-  it("si la bandeja no carga, se puede ir a la conversación", async () => {
-    vi.mocked(obtenerCasos).mockRejectedValue(new Error("caída"));
-    renderizarConConsultas(<Aplicacion />);
-
-    await userEvent.click(
-      await screen.findByRole("button", { name: TEXTOS_BANDEJA.abrirConversacion }),
-    );
-
-    expect(screen.getByRole("main")).not.toHaveClass("hidden");
-    expect(screen.getByRole("complementary")).toHaveClass("hidden");
-  });
-
-  it("al abrir un caso que la sesión abierta ya trató se ve su historial y una OC creada no ofrece «Procesar»", async () => {
-    localStorage.setItem(CLAVE_SESION, SESION_GUARDADA);
-    vi.mocked(obtenerSesion).mockResolvedValue({
-      id: SESION_GUARDADA,
-      historial: [
-        { tipo: "usuario", texto: "procesa sol-001" },
-        {
-          tipo: "herramienta",
-          llamada: { nombre: "oc_crear", args: { caso: "sol-001" }, ok: true, resumen: "OC" },
-        },
-        { tipo: "asistente", texto: "OC creada." },
-      ],
-      needsConfirmation: false,
-      casoPendiente: null,
-    });
-    renderizarConConsultas(<Aplicacion />);
-    expect(await screen.findByText("OC creada.")).toBeInTheDocument();
-
-    await userEvent.click(await screen.findByRole("button", { name: /Portátiles/ }));
-
-    expect(screen.getByText("OC creada.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: TEXTOS_BANDEJA.procesar })).not.toBeInTheDocument();
-    expect(JSON.parse(localStorage.getItem(CLAVE_SESIONES_POR_CASO) ?? "{}")).toEqual({
-      "sol-001": SESION_GUARDADA,
-    });
-  });
-
   it("avisa en el encabezado si la clave del modelo es inválida", async () => {
     vi.mocked(enviarMensaje).mockResolvedValue({
       reply: MENSAJE_CLAVE_INVALIDA,
@@ -308,40 +278,80 @@ describe("Aplicacion", () => {
     });
   });
 
-  it("muestra la bandeja con estados; elegir un caso y «Procesar» envía el mensaje del PRD §11", async () => {
+  it("la conversación vacía saluda y sus sugerencias envían mensajes reales", async () => {
     vi.mocked(enviarMensaje).mockResolvedValue(respuestaSol004);
     renderizarConConsultas(<Aplicacion />);
-    const fila = await screen.findByRole("button", { name: /Bolsa de 100 horas/ });
-    expect(screen.getByRole("button", { name: /Portátiles/ })).toHaveTextContent("Creada");
+    expect(screen.getByRole("heading", { name: TEXTOS_ESTADO_VACIO.titulo })).toBeInTheDocument();
+    const sugerencia = await screen.findByRole("button", {
+      name: /Procesa la solicitud sol-004.*Bolsa de 100 horas de desarrollo/,
+    });
+    expect(sugerencia).toHaveTextContent("Por revisar");
 
-    await userEvent.click(fila);
-    expect(fila).toHaveAttribute("aria-current", "true");
-    await userEvent.click(screen.getByRole("button", { name: TEXTOS_BANDEJA.procesar }));
+    await userEvent.click(sugerencia);
 
     await waitFor(() => {
       expect(vi.mocked(enviarMensaje).mock.calls[0]?.[0].message).toBe(mensajeProcesar("sol-004"));
     });
     expect(await screen.findByRole("heading", { name: /¿Creamos la OC de/ })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: TEXTOS_ESTADO_VACIO.titulo }),
+    ).not.toBeInTheDocument();
+    const sesion = vi.mocked(enviarMensaje).mock.calls[0]?.[0].sessionId;
+    expect(JSON.parse(localStorage.getItem(CLAVE_SESIONES_POR_CASO) ?? "{}")).toEqual({
+      "sol-004": sesion,
+    });
   });
 
-  it("refresca la bandeja después de cada respuesta del agente", async () => {
+  it("si las solicitudes no cargan, igual ofrece las sugerencias", async () => {
+    vi.mocked(obtenerCasos).mockRejectedValue(new Error("caída"));
+    renderizarConConsultas(<Aplicacion />);
+
+    await waitFor(() => {
+      expect(obtenerCasos).toHaveBeenCalled();
+    });
+
+    expect(screen.getAllByRole("button", { name: /sol-00/ })).toHaveLength(SUGERENCIAS.length);
+  });
+
+  it("«Nueva conversación» vuelve al saludo con otra sesión", async () => {
     vi.mocked(enviarMensaje).mockResolvedValue(respuestaSol004);
     renderizarConConsultas(<Aplicacion />);
-    await screen.findByRole("button", { name: /Bolsa de 100 horas/ });
+    await escribir("Procesa sol-004");
+    expect(await screen.findByText(PREGUNTA)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: TEXTOS_ENCABEZADO.nuevaSesion }));
+
+    expect(screen.getByRole("heading", { name: TEXTOS_ESTADO_VACIO.titulo })).toBeInTheDocument();
+    expect(screen.queryByText(PREGUNTA)).not.toBeInTheDocument();
+    expect(localStorage.getItem(CLAVE_SESION)).not.toBe(
+      vi.mocked(enviarMensaje).mock.calls[0]?.[0].sessionId,
+    );
+  });
+
+  it("el panel «Solicitudes» muestra los estados y se refresca tras cada respuesta", async () => {
+    vi.mocked(enviarMensaje).mockResolvedValue(respuestaSol004);
+    renderizarConConsultas(<Aplicacion />);
+    await screen.findByRole("button", { name: /Procesa la solicitud sol-004/ });
     vi.mocked(obtenerCasos).mockResolvedValue([
       resumenSol001,
       { ...resumenSol004, estado: "pendiente" },
     ]);
 
     await escribir("Procesa sol-004");
+    await screen.findByText(PREGUNTA);
+    await userEvent.click(screen.getByRole("button", { name: TEXTOS_ENCABEZADO.solicitudes }));
+    const panel = screen.getByRole("dialog", { name: /Solicitudes/ });
 
+    expect(within(panel).getByRole("button", { name: /Portátiles/ })).toHaveTextContent("Creada");
     expect(
-      await screen.findByRole("button", { name: /Bolsa de 100 horas.*Esperando tu confirmación/ }),
-    ).toBeInTheDocument();
+      within(panel).getByRole("button", { name: /Bolsa de 100 horas.*Esperando tu confirmación/ }),
+    ).toHaveAttribute("aria-current", "true");
     expect(obtenerCasos).toHaveBeenCalledTimes(2);
+    await userEvent.click(within(panel).getByRole("button", { name: TEXTOS_SOLICITUDES.cerrar }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("cada caso tiene su propia sesión y al volver a un caso se ve su conversación", async () => {
+  it("elegir solicitudes abre una conversación por caso y vuelve a la de cada uno", async () => {
     const respuestaSol001: RespuestaChat = {
       reply: "La OC 4500000001 ya existía.",
       toolCalls: [],
@@ -350,19 +360,12 @@ describe("Aplicacion", () => {
     vi.mocked(enviarMensaje)
       .mockResolvedValueOnce(respuestaSol004)
       .mockResolvedValueOnce(respuestaSol001);
-    vi.mocked(obtenerCasos).mockResolvedValue([
-      { ...resumenSol001, estado: "bloqueada", numero_oc: null },
-      resumenSol004,
-    ]);
     renderizarConConsultas(<Aplicacion />);
-    const procesarCaso = async (fila: RegExp): Promise<void> => {
-      await userEvent.click(await screen.findByRole("button", { name: fila }));
-      await userEvent.click(screen.getByRole("button", { name: TEXTOS_BANDEJA.procesar }));
-    };
 
-    await procesarCaso(/Bolsa de 100 horas/);
+    await elegirSolicitud(/Bolsa de 100 horas/);
     expect(await screen.findByText(PREGUNTA)).toBeInTheDocument();
     const sesionSol004 = vi.mocked(enviarMensaje).mock.calls[0]?.[0].sessionId;
+    expect(vi.mocked(enviarMensaje).mock.calls[0]?.[0].message).toBe(mensajeProcesar("sol-004"));
     vi.mocked(obtenerSesion).mockImplementation((id) =>
       Promise.resolve(
         id === sesionSol004
@@ -379,29 +382,17 @@ describe("Aplicacion", () => {
       ),
     );
 
-    await procesarCaso(/Portátiles/);
+    await elegirSolicitud(/Portátiles/);
     expect(await screen.findByText(respuestaSol001.reply)).toBeInTheDocument();
     expect(screen.queryByText(PREGUNTA)).not.toBeInTheDocument();
     const segunda = vi.mocked(enviarMensaje).mock.calls[1]?.[0];
     expect(segunda?.message).toBe(mensajeProcesar("sol-001"));
     expect(segunda?.sessionId).not.toBe(sesionSol004);
 
-    await userEvent.click(screen.getByRole("button", { name: /Bolsa de 100 horas/ }));
+    await elegirSolicitud(/Bolsa de 100 horas/);
     expect(await screen.findByText(PREGUNTA)).toBeInTheDocument();
     expect(screen.queryByText(respuestaSol001.reply)).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /¿Creamos la OC de/ })).toBeInTheDocument();
-  });
-
-  it("al recargar vuelve a seleccionar el caso de la sesión restaurada", async () => {
-    const sesion = SESION_GUARDADA;
-    localStorage.setItem(CLAVE_SESION, sesion);
-    localStorage.setItem(CLAVE_SESIONES_POR_CASO, JSON.stringify({ "sol-001": sesion }));
-    renderizarConConsultas(<Aplicacion />);
-
-    expect(await screen.findByRole("button", { name: /Portátiles/ })).toHaveAttribute(
-      "aria-current",
-      "true",
-    );
-    expect(obtenerSesion).toHaveBeenCalledWith(sesion);
+    expect(enviarMensaje).toHaveBeenCalledTimes(2);
   });
 });

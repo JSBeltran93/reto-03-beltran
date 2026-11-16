@@ -1,7 +1,6 @@
 import type { EntradaHistorial } from "@contratos/contratos-api";
 import { describe, expect, it } from "vitest";
 
-import { agruparEnBloques } from "./bloques";
 import {
   casoDeLlamada,
   casosDeHistorial,
@@ -97,18 +96,5 @@ describe("casosDeHistorial", () => {
     ];
 
     expect(casosDeHistorial(historial)).toEqual(["sol-004", "sol-999"]);
-  });
-});
-
-describe("agruparEnBloques", () => {
-  it("agrupa las llamadas consecutivas en una línea de tiempo por turno", () => {
-    const historial: EntradaHistorial[] = [
-      { tipo: "usuario", texto: "procesa" },
-      validar(undefined),
-      validar(undefined),
-      { tipo: "asistente", texto: "listo" },
-    ];
-
-    expect(agruparEnBloques(historial).map((b) => b.tipo)).toEqual(["entrada", "pasos", "entrada"]);
   });
 });

@@ -38,8 +38,11 @@
   --sombra-suave: 0 1px 2px rgb(15 23 42 / 0.04), 0 2px 8px -2px rgb(15 23 42 / 0.06);
   --sombra-elevada: 0 2px 4px rgb(15 23 42 / 0.04), 0 12px 24px -8px rgb(15 23 42 / 0.12);
 
-  /* Alto fijo del encabezado: la bandeja de escritorio se pega justo debajo. */
+  /* Alto fijo del encabezado. */
   --alto-encabezado: 3.5rem;
+
+  /* Ancho de la columna de conversación (y del compositor), centrada como en un chat. */
+  --ancho-chat: 47.5rem;
 
   /* Alto reservado para el pie fijo: el desplazamiento automático no deja contenido debajo de él. */
   --espacio-pie: 8rem;
@@ -108,6 +111,7 @@
 @theme {
   --animate-punto: punto 1.2s ease-in-out infinite;
   --animate-aparecer: aparecer 0.25s ease-out both;
+  --animate-deslizar: deslizar 0.2s ease-out both;
 
   @keyframes punto {
     0%,
@@ -119,6 +123,15 @@
     40% {
       opacity: 1;
       transform: translateY(-3px);
+    }
+  }
+
+  @keyframes deslizar {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: none;
     }
   }
 

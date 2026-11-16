@@ -1,14 +1,19 @@
 import { EsquemaSolicitudChat } from "@contratos/contratos-api";
 import { type KeyboardEvent, type SyntheticEvent, useEffect, useRef, useState } from "react";
 
-import { CLASES } from "./clases";
+import { IconoEnviar } from "./Iconos";
 import { TEXTOS_COMPOSITOR } from "./textos";
 
+/** Caja redondeada del compositor; el anillo de foco se dibuja en la caja, no en el campo. */
+const CLASE_CAJA =
+  "flex items-end gap-2 rounded-[1.75rem] border border-borde-fuerte/40 bg-superficie py-2 pr-2 pl-5 shadow-elevada transition focus-within:border-marca focus-within:ring-2 focus-within:ring-anillo/30";
+/** El campo crece con el texto (field-sizing) hasta un alto máximo y luego se desplaza. */
 const CLASE_TEXTO =
-  "anillo-foco min-h-12 flex-1 resize-none rounded-2xl border border-borde-fuerte bg-superficie px-4 py-2.5 shadow-suave text-sm leading-6 text-texto placeholder:text-texto-suave aria-disabled:opacity-60";
-const CLASE_BOTON = `${CLASES.botonPrimario} py-3`;
+  "max-h-48 min-h-10 flex-1 resize-none bg-transparent py-2 text-base leading-6 text-texto [field-sizing:content] outline-none placeholder:text-texto-suave aria-disabled:opacity-60";
+const CLASE_BOTON =
+  "anillo-foco grid size-10 shrink-0 place-items-center rounded-full bg-marca text-sobre-marca transition hover:bg-marca-fuerte disabled:cursor-not-allowed disabled:bg-elevada disabled:text-texto-suave";
 const TECLA_ENVIAR = "Enter";
-const FILAS_TEXTO = 2;
+const FILAS_TEXTO = 1;
 
 /** Largo máximo de un mensaje, tomado del contrato compartido de la API. */
 const LARGO_MAXIMO_MENSAJE = EsquemaSolicitudChat.shape.message.maxLength ?? undefined;
@@ -70,7 +75,7 @@ export function Compositor({ deshabilitado, textoGuia, idAyuda, alEnviar }: Prop
     alEnviar,
   });
   return (
-    <form onSubmit={alEnviarFormulario} className="flex items-end gap-2">
+    <form onSubmit={alEnviarFormulario} className={CLASE_CAJA}>
       <label htmlFor="mensaje" className="sr-only">
         {TEXTOS_COMPOSITOR.etiqueta}
       </label>
@@ -90,8 +95,13 @@ export function Compositor({ deshabilitado, textoGuia, idAyuda, alEnviar }: Prop
         onKeyDown={alPresionarTecla}
         className={CLASE_TEXTO}
       />
-      <button type="submit" disabled={deshabilitado || texto.trim() === ""} className={CLASE_BOTON}>
-        {TEXTOS_COMPOSITOR.enviar}
+      <button
+        type="submit"
+        aria-label={TEXTOS_COMPOSITOR.enviar}
+        disabled={deshabilitado || texto.trim() === ""}
+        className={CLASE_BOTON}
+      >
+        <IconoEnviar className="size-5" />
       </button>
     </form>
   );

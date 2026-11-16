@@ -8,8 +8,6 @@ export const CLASES = {
     "anillo-foco inline-flex items-center justify-center gap-2 rounded-xl bg-marca px-4 py-2.5 text-sm font-semibold text-sobre-marca shadow-suave transition hover:bg-marca-fuerte hover:shadow-elevada active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none",
   botonSecundario:
     "anillo-foco inline-flex items-center justify-center gap-2 rounded-xl border border-borde-fuerte bg-superficie px-4 py-2.5 text-sm font-medium text-texto transition hover:bg-elevada active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50",
-  botonIcono:
-    "anillo-foco inline-grid size-11 shrink-0 place-items-center rounded-xl border border-borde-fuerte bg-superficie text-texto transition-colors hover:bg-elevada disabled:cursor-not-allowed disabled:opacity-50",
   ficha: "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
   textoSuave: "text-texto-suave",
   /** Etiqueta pequeña y discreta para códigos técnicos (p. ej. la regla RC5). */

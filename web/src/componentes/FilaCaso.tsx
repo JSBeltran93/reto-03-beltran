@@ -6,23 +6,23 @@ import { formatearMonto } from "./formato";
 /** Props de {@link FilaCaso}. */
 export interface PropiedadesFilaCaso {
   readonly resumen: ResumenCaso;
+  /** true si la conversación abierta trata este caso. */
   readonly seleccionado: boolean;
-  /** Si es true, no se puede abrir (el agente trabaja en otro caso). */
+  /** Si es true, no se puede abrir (el agente está trabajando). */
   readonly deshabilitado?: boolean;
   readonly alSeleccionar: (caso: string) => void;
 }
 
-/** Estilo de la fila según esté o no seleccionada (borde de acento y fondo suave). */
+/** Estilo de la fila según trate o no la conversación abierta (fondo de acento suave). */
 const CLASES_FILA = {
-  base: "anillo-foco flex min-h-11 w-full flex-col gap-2 rounded-2xl border px-4 py-3.5 text-left transition disabled:cursor-not-allowed disabled:opacity-60",
-  normal:
-    "border-borde bg-superficie shadow-suave enabled:hover:-translate-y-px enabled:hover:shadow-elevada motion-reduce:enabled:hover:translate-y-0",
-  seleccionada: "border-marca bg-marca-suave shadow-suave ring-1 ring-marca",
+  base: "anillo-foco flex min-h-11 w-full flex-col gap-1.5 rounded-xl px-3 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+  normal: "enabled:hover:bg-elevada",
+  seleccionada: "bg-marca-suave ring-1 ring-marca/40",
 } as const;
 
 /**
- * Una solicitud de la bandeja: descripción, proveedor, monto, caso y estado.
- * `aria-current` anuncia cuál está abierta.
+ * Una solicitud: descripción, proveedor, monto, caso y estado. `aria-current` anuncia
+ * las que trata la conversación abierta.
  * @param props - resumen del caso, si está seleccionado o deshabilitado y la acción al elegirlo
  * @returns el botón de la fila
  */

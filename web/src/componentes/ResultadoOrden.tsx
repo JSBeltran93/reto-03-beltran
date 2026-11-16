@@ -118,14 +118,22 @@ function Excepciones({ orden }: { readonly orden: Orden }) {
  * @param props - datos del payload
  * @returns el documento
  */
-export function DocumentoOrden({ datos }: { readonly datos: DatosPayload }) {
+export function DocumentoOrden({
+  datos,
+  creada = false,
+}: {
+  readonly datos: DatosPayload;
+  /** true si la OC ya se creó en este turno: deja de mostrarse como borrador. */
+  readonly creada?: boolean;
+}) {
   const { orden } = datos;
+  const titulo = creada ? TEXTOS_ORDEN.tituloCreada : TEXTOS_ORDEN.titulo;
   return (
-    <article aria-label={TEXTOS_ORDEN.titulo} className={`${CLASES.tarjeta} overflow-hidden`}>
+    <article aria-label={titulo} className={`${CLASES.tarjeta} overflow-hidden`}>
       <header className="border-b border-borde bg-elevada px-4 py-4 sm:px-6">
-        <h3 className="text-base font-semibold tracking-tight">{TEXTOS_ORDEN.titulo}</h3>
+        <h3 className="text-base font-semibold tracking-tight">{titulo}</h3>
         <p className="mt-0.5 text-xs text-texto-suave">
-          {TEXTOS_ORDEN.borrador}
+          {creada ? TEXTOS_ORDEN.subtituloCreada : TEXTOS_ORDEN.borrador}
           {orden.referencia && ` · ${TEXTOS_ORDEN.referencia} ${orden.referencia.solicitud_id}`}
         </p>
       </header>
