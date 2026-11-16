@@ -162,7 +162,9 @@ export function etiquetaValor(clave: string): string {
 /** Textos de la orden de compra propuesta y creada. */
 export const TEXTOS_ORDEN = {
   titulo: "Así quedaría la OC en SAP",
+  tituloCreada: "OC registrada en SAP",
   borrador: "Borrador · aún no se ha creado",
+  subtituloCreada: "Creada con tu confirmación",
   posiciones: "Productos y servicios",
   columnas: {
     descripcion: "Descripción",
