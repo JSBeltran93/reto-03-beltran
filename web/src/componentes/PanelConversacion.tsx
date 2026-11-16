@@ -2,9 +2,9 @@ import type { ResumenCaso } from "@contratos/contratos-api";
 
 import { terminoEnError } from "../estado/conversacion";
 import { confirmacionesPendientes } from "../estado/resultados";
+import type { Sugerencia } from "../estado/sugerencias";
 import type { Conversacion } from "../estado/useConversacion";
 import { AvisosConversacion } from "./AvisosConversacion";
-import { CabeceraCaso } from "./CabeceraCaso";
 import { EstadoVacio } from "./EstadoVacio";
 import { ListaMensajes } from "./ListaMensajes";
 import { PieCompositor } from "./PieCompositor";
@@ -13,35 +13,29 @@ import { useDesplazarAlFinal } from "./useDesplazarAlFinal";
 /** Props de {@link PanelConversacion}. */
 export interface PropiedadesPanelConversacion {
   readonly conversacion: Conversacion;
-  /** Caso abierto (seleccionado o pendiente de confirmación), o null. */
-  readonly caso: string | null;
-  /** Busca el resumen de un caso en la bandeja. */
+  /** Busca el resumen de un caso entre las solicitudes cargadas. */
   readonly resumenDe: (caso: string | null) => ResumenCaso | undefined;
-  /** Clases de visibilidad del panel (móvil / escritorio). */
-  readonly clases: string;
-  readonly alProcesar: (caso: string) => void;
-  readonly alVolver: () => void;
+  readonly sugerencias: readonly Sugerencia[];
+  readonly alElegirSugerencia: (sugerencia: Sugerencia) => void;
+  readonly alVerSolicitudes: () => void;
 }
 
 /**
- * Mensajes y avisos del panel: estado vacío, historial, pensando, error y confirmación.
- * Si el último turno fue un error y no hay confirmación pendiente, ese error del historial
- * ofrece "Reintentar"; con confirmación pendiente manda la tarjeta de confirmación.
- * @param props - conversación, caso abierto y búsqueda de resúmenes
- * @returns el cuerpo de la conversación
+ * Historial y avisos: si el último turno fue un error y no hay confirmación pendiente,
+ * ese error del historial ofrece "Reintentar"; con confirmación pendiente manda la tarjeta.
+ * @param props - conversación y búsqueda de resúmenes
+ * @returns el historial con sus avisos
  */
-function CuerpoConversacion({
+function Historial({
   conversacion,
-  caso,
   resumenDe,
-}: Pick<PropiedadesPanelConversacion, "conversacion" | "caso" | "resumenDe">) {
+}: Pick<PropiedadesPanelConversacion, "conversacion" | "resumenDe">) {
   const { estado, cargando, enviar, reintentar } = conversacion;
   const { error, entradas, casoPendiente } = estado;
   const mostrarConfirmacion = estado.esperaConfirmacion && !cargando;
   const reintentable = terminoEnError(entradas) && !mostrarConfirmacion && !cargando;
   return (
     <>
-      {entradas.length === 0 && caso === null && <EstadoVacio />}
       {entradas.length > 0 && (
         <ListaMensajes
           entradas={entradas}
@@ -63,29 +57,38 @@ function CuerpoConversacion({
 }
 
 /**
- * Panel derecho: cabecera del caso con "Procesar", conversación con los pasos del agente,
- * avisos (pensando, error, confirmación) y el cuadro de mensaje fijo abajo.
- * @param props - conversación, caso abierto y acciones
- * @returns el panel
+ * La conversación, protagonista de la página: una columna centrada con el estado vacío
+ * (saludo y sugerencias) o el historial por turnos, y el compositor fijo abajo.
+ * @param props - conversación, sugerencias y acciones
+ * @returns el panel principal
  */
 export function PanelConversacion(props: PropiedadesPanelConversacion) {
-  const { conversacion, caso, resumenDe, clases, alProcesar, alVolver } = props;
+  const { conversacion, resumenDe, sugerencias, alElegirSugerencia, alVerSolicitudes } = props;
   const { estado, cargando, enviar } = conversacion;
   const mostrarConfirmacion = estado.esperaConfirmacion && !cargando;
-  const cambios = [caso, estado.entradas.length, cargando, mostrarConfirmacion, estado.error];
-  const marcadorFin = useDesplazarAlFinal(cambios);
+  const vacia = estado.entradas.length === 0 && !cargando && estado.error === null;
+  const marcadorFin = useDesplazarAlFinal([
+    estado.sessionId,
+    estado.entradas.length,
+    cargando,
+    mostrarConfirmacion,
+    estado.error,
+  ]);
 
   return (
-    <main className={`${clases} min-w-0 flex-col gap-4 px-4 pt-4 lg:px-0 lg:pt-6`}>
-      <CabeceraCaso
-        caso={caso}
-        resumen={resumenDe(caso)}
-        deshabilitado={cargando}
-        alProcesar={alProcesar}
-        alVolver={alVolver}
-      />
-      <CuerpoConversacion conversacion={conversacion} caso={caso} resumenDe={resumenDe} />
-      <div ref={marcadorFin} aria-hidden="true" className="flex-1" />
+    <main className="flex min-w-0 flex-1 flex-col">
+      <div className="mx-auto flex w-full max-w-(--ancho-chat) flex-1 flex-col px-4 pt-6 pb-4 sm:pt-10">
+        {vacia && (
+          <EstadoVacio
+            sugerencias={sugerencias}
+            deshabilitado={cargando}
+            alElegir={alElegirSugerencia}
+            alVerSolicitudes={alVerSolicitudes}
+          />
+        )}
+        <Historial conversacion={conversacion} resumenDe={resumenDe} />
+        <div ref={marcadorFin} aria-hidden="true" />
+      </div>
       <PieCompositor
         deshabilitado={cargando}
         esperandoConfirmacion={mostrarConfirmacion}

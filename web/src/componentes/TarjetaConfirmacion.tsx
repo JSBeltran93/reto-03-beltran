@@ -2,9 +2,9 @@ import type { ResumenCaso } from "@contratos/contratos-api";
 
 import type { Hallazgo } from "../estado/resultados";
 import { CLASES } from "./clases";
+import { FichaHallazgo } from "./FichaHallazgo";
 import { formatearMonto } from "./formato";
 import { IconoAlerta } from "./Iconos";
-import { FichaHallazgo } from "./ResultadoValidacion";
 import { TEXTOS_CONFIRMACION } from "./textos";
 
 /** Identificador del título de la tarjeta (lo usa `aria-labelledby`). */
@@ -16,7 +16,7 @@ export interface PropiedadesTarjetaConfirmacion {
   readonly confirmaciones: readonly Hallazgo[];
   /** Caso cuya OC se confirma; sin él, el título es genérico. */
   readonly caso: string | null;
-  /** Resumen del caso en la bandeja, para recordar qué se va a crear. */
+  /** Resumen del caso entre las solicitudes, para recordar qué se va a crear. */
   readonly resumen?: ResumenCaso | undefined;
   /** Deshabilita los botones mientras hay una petición en curso. */
   readonly deshabilitado: boolean;

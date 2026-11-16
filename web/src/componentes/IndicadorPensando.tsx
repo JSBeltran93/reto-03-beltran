@@ -1,5 +1,5 @@
-import { CLASES } from "./clases";
 import { TEXTOS_ESTADO } from "./textos";
+import { AvatarAsistente } from "./TurnoAsistente";
 
 /** Retraso de cada punto para que suban en secuencia. */
 const RETRASOS_PUNTOS = [
@@ -7,8 +7,6 @@ const RETRASOS_PUNTOS = [
   "[animation-delay:150ms]",
   "[animation-delay:300ms]",
 ];
-
-const CLASE_LINEA = "h-2.5 rounded-full bg-elevada motion-safe:animate-pulse";
 
 /** Props de {@link IndicadorPensando}. */
 export interface PropiedadesIndicadorPensando {
@@ -18,17 +16,18 @@ export interface PropiedadesIndicadorPensando {
 
 /**
  * Región de estado persistente: los lectores de pantalla anuncian el texto cuando el
- * agente empieza a trabajar (PRD §6.1). Se ven tres puntos que suben en secuencia y un
- * esqueleto de la respuesta; sin animación si el usuario pidió movimiento reducido.
+ * agente empieza a trabajar (PRD §6.1). Se ve como un turno del asistente con tres puntos
+ * que suben en secuencia; sin animación si el usuario pidió movimiento reducido.
  * @param props - si el agente está trabajando
  * @returns la región de estado
  */
 export function IndicadorPensando({ activo }: PropiedadesIndicadorPensando) {
   return (
-    <div role="status">
+    <div role="status" className={activo ? "mt-8" : undefined}>
       {activo && (
-        <div className={`${CLASES.tarjeta} space-y-4 px-5 py-4 motion-safe:animate-aparecer`}>
-          <p className="flex items-center gap-3 text-sm font-medium text-texto-suave">
+        <div className="flex items-center gap-3 motion-safe:animate-aparecer sm:gap-4">
+          <AvatarAsistente />
+          <p className="flex items-center gap-3 rounded-full bg-elevada px-4 py-2 text-sm font-medium text-texto-suave">
             <span aria-hidden="true" className="flex items-center gap-1 text-info">
               {RETRASOS_PUNTOS.map((retraso) => (
                 <span
@@ -39,10 +38,6 @@ export function IndicadorPensando({ activo }: PropiedadesIndicadorPensando) {
             </span>
             {TEXTOS_ESTADO.pensando}
           </p>
-          <div aria-hidden="true" className="space-y-2">
-            <div className={`${CLASE_LINEA} w-3/4`} />
-            <div className={`${CLASE_LINEA} w-1/2`} />
-          </div>
         </div>
       )}
     </div>

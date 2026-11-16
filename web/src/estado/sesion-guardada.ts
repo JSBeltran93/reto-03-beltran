@@ -4,10 +4,10 @@ import { z } from "zod";
 /** Clave de `localStorage` donde se recuerda la sesión del navegador. */
 export const CLAVE_SESION = "oc-agente-sesion";
 
-/** Clave de `localStorage` donde se recuerda la sesión de cada caso (caso → sessionId). */
+/** Clave de `localStorage` donde se recuerda la última conversación de cada caso (caso → sessionId). */
 export const CLAVE_SESIONES_POR_CASO = "oc-agente-sesiones-por-caso";
 
-/** Sesión de chat de cada caso de la bandeja: cada caso tiene su propia conversación. */
+/** Última conversación de cada caso, para volver a ella desde "Solicitudes". */
 export type SesionesPorCaso = Readonly<Record<string, string>>;
 
 const EsquemaSesionesPorCaso = z.record(z.string(), EsquemaSolicitudChat.shape.sessionId);
@@ -93,17 +93,4 @@ export function recordarSesionDeCaso(caso: string, id: string): void {
   } catch {
     // Sin almacenamiento disponible la sesión del caso no se recuerda; no es un error para el usuario.
   }
-}
-
-/**
- * Busca el caso al que pertenece una sesión.
- * @param id - identificador de la sesión
- * @param mapa - sesiones recordadas por caso (por defecto, las del almacenamiento)
- * @returns el caso, o null si la sesión no es de ningún caso
- */
-export function casoDeSesion(
-  id: string,
-  mapa: SesionesPorCaso = leerSesionesPorCaso(),
-): string | null {
-  return Object.entries(mapa).find(([, sesion]) => sesion === id)?.[0] ?? null;
 }
